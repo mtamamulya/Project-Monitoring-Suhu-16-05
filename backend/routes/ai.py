@@ -1,0 +1,155 @@
+"""
+routes/ai.py
+Context-injected Gemini 2.5 Flash chat endpoint.
+Queries last 50 telemetry records + today's stats and injects them
+as a hidden system prompt before forwarding the user message.
+"""
+
+import logging
+from datetime import datetime, timezone
+from typing import Any
+import google.generativeai as genai
+from firebase_admin import firestore
+
+logger = logging.getLogger(__name__)
+
+GEMINI_MODEL = "gemini-2.5-flash"
+LAST_N_RECORDS = 50
+
+
+def _fetch_context_data() -> dict[str, Any]:
+    """
+    Build structured analytical context from Firestore:
+    - Last N telemetry readings
+    - Today's min/max/avg temperature and humidity
+    - Outdoor Semarang weather cache
+    """
+    db = firestore.client()
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Last N records (ordered by timestamp desc)
+    records_query = (
+        db.collection("telemetry")
+        .order_by("timestamp", direction=firestore.Query.DESCENDING)
+        .limit(LAST_N_RECORDS)
+    )
+    records = [doc.to_dict() for doc in records_query.stream()]
+
+    # Today's aggregated stats
+    today_query = (
+        db.collection("telemetry")
+        .where("timestamp", ">=", today_start)
+        .order_by("timestamp")
+    )
+    today_records = [doc.to_dict() for doc in today_query.stream()]
+
+    stats = {}
+    if today_records:
+        temps = [r["temperature"] for r in today_records if "temperature" in r]
+        humids = [r["humidity"] for r in today_records if "humidity" in r]
+        stats = {
+            "count": len(today_records),
+            "temp_min": round(min(temps), 2) if temps else None,
+            "temp_max": round(max(temps), 2) if temps else None,
+            "temp_avg": round(sum(temps) / len(temps), 2) if temps else None,
+            "humidity_min": round(min(humids), 2) if humids else None,
+            "humidity_max": round(max(humids), 2) if humids else None,
+            "humidity_avg": round(sum(humids) / len(humids), 2) if humids else None,
+        }
+
+    # Outdoor weather cache
+    outdoor_doc = db.collection("_system").document("weather_cache").get()
+    outdoor = outdoor_doc.to_dict() if outdoor_doc.exists else {}
+
+    return {
+        "recent_records": records,
+        "today_stats": stats,
+        "outdoor_weather": outdoor,
+        "context_generated_at": now.isoformat(),
+    }
+
+
+def _build_system_prompt(context: dict[str, Any]) -> str:
+    stats = context.get("today_stats", {})
+    outdoor = context.get("outdoor_weather", {})
+    records = context.get("recent_records", [])
+
+    # Calculate indoor vs outdoor delta if both are available
+    delta_str = "N/A"
+    if stats.get("temp_avg") is not None and outdoor.get("temperature") is not None:
+        delta = round(stats["temp_avg"] - outdoor["temperature"], 2)
+        delta_str = f"{'+' if delta >= 0 else ''}{delta}°C"
+
+    recent_summary = ""
+    if records:
+        latest = records[0]
+        recent_summary = (
+            f"Most recent reading: {latest.get('temperature', 'N/A')}°C / "
+            f"{latest.get('humidity', 'N/A')}% at {latest.get('timestamp', 'N/A')}"
+        )
+
+    return f"""You are an expert IoT climate analyst and assistant for a Weather & Room Climate Monitoring Dashboard located in Semarang, Indonesia.
+
+You have exclusive access to the following LIVE sensor data context. Use it to give highly specific, data-driven, and contextual answers. Do NOT mention that you were given this data unless directly asked.
+
+--- LIVE SENSOR CONTEXT ---
+Context generated at: {context.get("context_generated_at", "N/A")}
+{recent_summary}
+
+TODAY'S INDOOR SUMMARY ({stats.get("count", 0)} data points):
+  Temperature — Min: {stats.get("temp_min", "N/A")}°C | Max: {stats.get("temp_max", "N/A")}°C | Avg: {stats.get("temp_avg", "N/A")}°C
+  Humidity    — Min: {stats.get("humidity_min", "N/A")}% | Max: {stats.get("humidity_max", "N/A")}% | Avg: {stats.get("humidity_avg", "N/A")}%
+
+OUTDOOR SEMARANG (OpenWeatherMap):
+  Temperature: {outdoor.get("temperature", "N/A")}°C | Feels like: {outdoor.get("feels_like", "N/A")}°C
+  Humidity: {outdoor.get("humidity", "N/A")}% | Wind: {outdoor.get("wind_speed", "N/A")} m/s
+  Conditions: {outdoor.get("description", "N/A")}
+
+INDOOR vs OUTDOOR DELTA (ΔT):
+  ΔT = {delta_str}
+
+LAST {len(records)} READINGS (newest first):
+{chr(10).join(
+    f"  [{r.get('timestamp', 'N/A')}] {r.get('device_id', '?')}: {r.get('temperature', '?')}°C / {r.get('humidity', '?')}%"
+    for r in records[:10]
+)}
+--- END CONTEXT ---
+
+You should:
+- Detect anomalies, trends, or concerning patterns from the data above
+- Provide actionable, human-friendly analysis and recommendations
+- Answer questions about comfort levels, humidity risks, heat patterns, or comparisons with outdoor conditions
+- Be concise but insightful; avoid generic filler text
+- If asked about data you don't have, say so clearly
+"""
+
+
+def handle_chat(user_message: str, gemini_api_key: str) -> str:
+    """
+    Process a user chat message by injecting live sensor context as system
+    prompt and forwarding to Gemini 2.5 Flash. Returns the AI response text.
+    """
+    if not user_message or not user_message.strip():
+        return "Please provide a message."
+
+    genai.configure(api_key=gemini_api_key)
+
+    try:
+        context = _fetch_context_data()
+    except Exception as exc:
+        logger.warning("Could not fetch sensor context: %s", exc)
+        context = {}
+
+    system_prompt = _build_system_prompt(context)
+
+    try:
+        model = genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            system_instruction=system_prompt,
+        )
+        response = model.generate_content(user_message)
+        return response.text
+    except Exception as exc:
+        logger.error("Gemini API error: %s", exc)
+        raise RuntimeError(f"AI service unavailable: {exc}") from exc

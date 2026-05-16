@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClimateOS — Semarang Room Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Syne', 'sans-serif'],
+            mono: ['DM Mono', 'monospace'],
+            body: ['DM Sans', 'sans-serif'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              925: '#0f0f11',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #09090b;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(120,80,255,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 90% 80%, rgba(255,140,50,0.04) 0%, transparent 60%);
+      min-height: 100vh;
+    }
+
+    /* ── Gauge SVG styles ── */
+    .gauge-track { fill: none; stroke: #27272a; stroke-linecap: round; }
+    .gauge-arc { fill: none; stroke-linecap: round; transition: stroke-dashoffset 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .gauge-glow { filter: drop-shadow(0 0 6px currentColor); }
+
+    /* ── Pulse animation for critical state ── */
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    }
+    .badge-critical { animation: pulse-ring 1.5s ease infinite; }
+
+    /* ── Mic ripple animation ── */
+    @keyframes mic-ripple {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+    .mic-ripple::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(239,68,68,0.3);
+      animation: mic-ripple 1s ease-out infinite;
+    }
+    .mic-active { color: #ef4444 !important; position: relative; }
+
+    /* ── Chat bubbles ── */
+    .chat-user { background: #27272a; border-radius: 18px 18px 4px 18px; }
+    .chat-ai { background: #18181b; border: 1px solid rgba(139,92,246,0.2); border-radius: 18px 18px 18px 4px; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 2px; }
+
+    /* ── Stat card hover ── */
+    .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+
+    /* ── Chart container ── */
+    .chart-wrapper { position: relative; height: 260px; }
+
+    /* ── Segmented control ── */
+    .seg-btn { transition: all 0.2s ease; }
+    .seg-btn.active {
+      background: #3f3f46;
+      color: #f4f4f5;
+    }
+
+    /* ── Heartbeat dot ── */
+    @keyframes hb-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+    .hb-dot { animation: hb-dot 2s ease infinite; }
+
+    /* ── Card entrance ── */
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card-enter { animation: slide-up 0.4s ease both; }
+
+    /* Print styles for PDF export */
+    @media print {
+      body { background: white !important; }
+      .no-print { display: none !important; }
+      .print-section { break-inside: avoid; }
+    }
+
+    /* ── Delta arrow ── */
+    .delta-up { color: #f87171; }
+    .delta-down { color: #34d399; }
+    .delta-eq { color: #a1a1aa; }
+
+    /* ── Typing indicator ── */
+    @keyframes typing-dot {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-4px); }
+    }
+    .typing-dot:nth-child(1) { animation: typing-dot 1s ease infinite 0ms; }
+    .typing-dot:nth-child(2) { animation: typing-dot 1s ease infinite 150ms; }
+    .typing-dot:nth-child(3) { animation: typing-dot 1s ease infinite 300ms; }
+  </style>
+</head>
+
+<body class="text-zinc-100 min-h-screen">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="sticky top-0 z-50 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl">
+    <div class="max-w-[1440px] mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-orange-400 flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        </div>
+        <span class="font-display text-lg font-700 tracking-tight text-zinc-100">ClimateOS</span>
+        <span class="text-zinc-600 font-mono text-xs hidden sm:block">/ semarang</span>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <!-- Live heartbeat -->
+        <div class="flex items-center gap-2 text-zinc-500 font-mono text-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 hb-dot"></span>
+          <span id="last-updated">—</span>
+        </div>
+        <!-- Export buttons -->
+        <button id="btn-export-csv" class="no-print hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-all border border-zinc-800">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+          CSV
+        </button>
+        <button id="btn-export-pdf" class="no-print hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-all border border-zinc-800">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          PDF
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main Content ─────────────────────────────────────────── -->
+  <main class="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+
+    <!-- ══ ROW 1: Bento Top Grid ═══════════════════════════════════════ -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+      <!-- Temperature Gauge Card -->
+      <div class="card-enter col-span-1 relative bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 flex flex-col items-center justify-between overflow-hidden" style="animation-delay:0ms">
+        <div class="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none rounded-2xl"></div>
+        <div class="w-full flex items-center justify-between mb-1">
+          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Temperature</span>
+          <span id="badge-temp" class="text-xs font-display font-600 px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 transition-all duration-500">—</span>
+        </div>
+        <div class="relative my-1">
+          <svg id="gauge-temp" viewBox="0 0 140 100" width="180" height="130" class="overflow-visible">
+            <!-- Track arc: 210° sweep (from -210° to 30° in SVG terms) -->
+            <path id="gauge-temp-track" class="gauge-track" stroke-width="8" d="M 20 85 A 50 50 0 1 1 120 85" />
+            <path id="gauge-temp-arc" class="gauge-arc gauge-glow" stroke="#f97316" stroke-width="8" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;" />
+            <text id="gauge-temp-value" x="70" y="78" text-anchor="middle" dominant-baseline="middle" font-family="Syne" font-size="22" font-weight="800" fill="#f4f4f5">—</text>
+            <text x="70" y="95" text-anchor="middle" font-family="DM Mono" font-size="7" fill="#71717a">°C</text>
+          </svg>
+        </div>
+        <div class="w-full flex justify-between text-zinc-600 font-mono text-xs">
+          <span>0°</span><span>50°</span>
+        </div>
+      </div>
+
+      <!-- Humidity Gauge Card -->
+      <div class="card-enter col-span-1 relative bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 flex flex-col items-center justify-between overflow-hidden" style="animation-delay:80ms">
+        <div class="absolute inset-0 bg-gradient-to-br from-sky-500/5 to-transparent pointer-events-none rounded-2xl"></div>
+        <div class="w-full flex items-center justify-between mb-1">
+          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Humidity</span>
+          <span id="badge-hum" class="text-xs font-display font-600 px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400">—</span>
+        </div>
+        <div class="relative my-1">
+          <svg id="gauge-hum" viewBox="0 0 140 100" width="180" height="130" class="overflow-visible">
+            <path id="gauge-hum-track" class="gauge-track" stroke-width="8" d="M 20 85 A 50 50 0 1 1 120 85" />
+            <path id="gauge-hum-arc" class="gauge-arc gauge-glow" stroke="#38bdf8" stroke-width="8" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;" />
+            <text id="gauge-hum-value" x="70" y="78" text-anchor="middle" dominant-baseline="middle" font-family="Syne" font-size="22" font-weight="800" fill="#f4f4f5">—</text>
+            <text x="70" y="95" text-anchor="middle" font-family="DM Mono" font-size="7" fill="#71717a">%</text>
+          </svg>
+        </div>
+        <div class="w-full flex justify-between text-zinc-600 font-mono text-xs">
+          <span>0%</span><span>100%</span>
+        </div>
+      </div>
+
+      <!-- Microclimate Comparison Card -->
+      <div class="card-enter col-span-2 relative bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 overflow-hidden" style="animation-delay:160ms">
+        <div class="absolute inset-0 bg-gradient-to-br from-violet-500/4 to-transparent pointer-events-none rounded-2xl"></div>
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Microclimate · Indoor vs Outdoor</span>
+          <span class="text-zinc-600 font-mono text-xs">Semarang</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 items-center">
+          <!-- Indoor -->
+          <div class="space-y-1">
+            <p class="text-zinc-500 font-mono text-xs">Indoor</p>
+            <p id="compare-indoor-temp" class="font-display font-800 text-4xl text-zinc-100">—</p>
+            <p id="compare-indoor-hum" class="text-zinc-500 font-mono text-xs">—% RH</p>
+          </div>
+
+          <!-- Delta -->
+          <div class="flex flex-col items-center gap-1">
+            <div id="delta-arrow" class="text-2xl">→</div>
+            <div class="bg-zinc-800/70 rounded-xl px-3 py-1.5 text-center">
+              <p class="text-zinc-500 font-mono text-xs">ΔT</p>
+              <p id="delta-value" class="font-display font-700 text-xl text-zinc-200">—</p>
+            </div>
+          </div>
+
+          <!-- Outdoor -->
+          <div class="space-y-1 text-right">
+            <p class="text-zinc-500 font-mono text-xs">Outdoor</p>
+            <p id="compare-outdoor-temp" class="font-display font-800 text-4xl text-zinc-100">—</p>
+            <p id="compare-outdoor-desc" class="text-zinc-500 font-mono text-xs truncate">—</p>
+          </div>
+        </div>
+
+        <!-- Wind / Feels like bar -->
+        <div class="mt-4 pt-3 border-t border-zinc-800/60 flex gap-4 text-xs font-mono text-zinc-500">
+          <span>Feels like <span id="outdoor-feels" class="text-zinc-400">—</span></span>
+          <span>Wind <span id="outdoor-wind" class="text-zinc-400">—</span> m/s</span>
+          <span>Humidity <span id="outdoor-hum" class="text-zinc-400">—</span>%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ROW 2: Stats + Chart ═══════════════════════════════════════ -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Min -->
+      <div class="stat-card card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 print-section" style="animation-delay:240ms">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg bg-sky-500/10 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+          </div>
+          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Min Temp</span>
+        </div>
+        <p id="stat-min" class="font-display font-800 text-3xl text-zinc-100">—</p>
+        <p class="text-zinc-600 font-mono text-xs mt-1">Today's lowest</p>
+      </div>
+
+      <!-- Max -->
+      <div class="stat-card card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 print-section" style="animation-delay:300ms">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" /></svg>
+          </div>
+          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Max Temp</span>
+        </div>
+        <p id="stat-max" class="font-display font-800 text-3xl text-zinc-100">—</p>
+        <p class="text-zinc-600 font-mono text-xs mt-1">Today's peak</p>
+      </div>
+
+      <!-- Avg -->
+      <div class="stat-card card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 print-section" style="animation-delay:360ms">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+          </div>
+          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Avg Temp</span>
+        </div>
+        <p id="stat-avg" class="font-display font-800 text-3xl text-zinc-100">—</p>
+        <p class="text-zinc-600 font-mono text-xs mt-1">Today's average</p>
+      </div>
+
+      <!-- Count -->
+      <div class="stat-card card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 print-section" style="animation-delay:420ms">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
+          </div>
+          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Data Points</span>
+        </div>
+        <p id="stat-count" class="font-display font-800 text-3xl text-zinc-100">—</p>
+        <p class="text-zinc-600 font-mono text-xs mt-1">Recorded today</p>
+      </div>
+    </div>
+
+    <!-- ══ ROW 3: Chart ═══════════════════════════════════════════════ -->
+    <div class="card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 print-section" style="animation-delay:480ms">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="font-display font-700 text-zinc-100 text-base">Time-Series Analytics</h2>
+          <p class="text-zinc-600 font-mono text-xs mt-0.5">Temperature & Humidity over time</p>
+        </div>
+        <!-- Segmented time range control -->
+        <div class="flex gap-1 bg-zinc-800/60 rounded-xl p-1 self-start sm:self-auto">
+          <button class="seg-btn active text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-400" data-range="live">Live</button>
+          <button class="seg-btn text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300" data-range="1h">1h</button>
+          <button class="seg-btn text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300" data-range="3h">3h</button>
+          <button class="seg-btn text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300" data-range="12h">12h</button>
+          <button class="seg-btn text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300" data-range="24h">24h</button>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="climate-chart"></canvas>
+      </div>
+      <!-- Legend -->
+      <div class="flex gap-4 mt-3 justify-center">
+        <div class="flex items-center gap-1.5">
+          <span class="w-6 h-0.5 bg-orange-400 rounded inline-block"></span>
+          <span class="text-zinc-500 font-mono text-xs">Temperature (°C)</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-6 h-0.5 bg-sky-400 rounded inline-block"></span>
+          <span class="text-zinc-500 font-mono text-xs">Humidity (%)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ROW 4: AI Chat ══════════════════════════════════════════════ -->
+    <div class="card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl overflow-hidden" style="animation-delay:560ms">
+      <div class="flex items-center gap-3 p-4 border-b border-zinc-800/60">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center flex-shrink-0">
+          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-1" /></svg>
+        </div>
+        <div>
+          <h2 class="font-display font-700 text-zinc-100 text-sm">Climate AI Analyst</h2>
+          <p class="text-zinc-600 font-mono text-xs">Powered by Gemini 2.5 Flash · Context-injected with live sensor data</p>
+        </div>
+        <div class="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20">
+          <span class="w-1.5 h-1.5 rounded-full bg-violet-400 hb-dot"></span>
+          <span class="text-violet-400 font-mono text-xs">online</span>
+        </div>
+      </div>
+
+      <!-- Chat messages area -->
+      <div id="chat-messages" class="h-72 overflow-y-auto p-4 space-y-3 scroll-smooth">
+        <!-- Welcome message -->
+        <div class="chat-ai max-w-xl p-3">
+          <p class="text-zinc-300 text-sm leading-relaxed">
+            👋 Hi! I'm your climate analyst. I have access to your <strong class="text-violet-400">live sensor data</strong>, historical trends, and Semarang outdoor conditions. Ask me anything — anomalies, comfort levels, trend analysis, or what's causing the temperature spike.
+          </p>
+        </div>
+      </div>
+
+      <!-- Chat input -->
+      <div class="p-3 border-t border-zinc-800/60">
+        <div class="flex gap-2 items-center bg-zinc-800/50 rounded-xl border border-zinc-700/50 px-3 py-2 focus-within:border-violet-500/50 transition-colors">
+          <input
+            id="chat-input"
+            type="text"
+            placeholder="Ask about your climate data..."
+            class="flex-1 bg-transparent text-zinc-200 text-sm font-body placeholder-zinc-600 outline-none min-w-0"
+            autocomplete="off"
+          />
+          <!-- Mic button -->
+          <button id="btn-mic" title="Speech to Text" class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-all">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          </button>
+          <!-- Send button -->
+          <button id="btn-send" class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-violet-600 hover:bg-violet-500 transition-all disabled:opacity-40">
+            <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        </div>
+        <p class="text-zinc-700 font-mono text-xs mt-1.5 px-1">Press Enter or click send · Microphone for voice input</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────────────── -->
+  <footer class="max-w-[1440px] mx-auto px-6 py-4 mt-2 border-t border-zinc-800/40 flex items-center justify-between text-zinc-700 font-mono text-xs">
+    <span>ClimateOS · ESP32 + Firebase + Gemini</span>
+    <span id="footer-time">—</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
