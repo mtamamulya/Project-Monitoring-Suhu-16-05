@@ -135,33 +135,40 @@ def history():
     """
     GET /api/history?range=live|1h|3h|12h|24h
     """
-    range_param   = request.args.get("range", "1h")
-    range_minutes = {"live": 15, "1h": 60, "3h": 180, "12h": 720, "24h": 1440}.get(range_param, 60)
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 503
 
-    now    = datetime.now(timezone.utc)
-    cutoff = now - timedelta(minutes=range_minutes)
+    try:
+        range_param   = request.args.get("range", "1h")
+        range_minutes = {"live": 15, "1h": 60, "3h": 180, "12h": 720, "24h": 1440}.get(range_param, 60)
 
-    query = (
-        db.collection("telemetry")
-        .where("timestamp", ">=", cutoff)
-        .order_by("timestamp", direction=firestore.Query.ASCENDING)
-        .limit(500)
-    )
+        now    = datetime.now(timezone.utc)
+        cutoff = now - timedelta(minutes=range_minutes)
 
-    records = []
-    for doc in query.stream():
-        d  = doc.to_dict()
-        ts = d.get("timestamp")
-        if hasattr(ts, "isoformat"):
-            ts = ts.isoformat()
-        records.append({
-            "temperature": d.get("temperature"),
-            "humidity":    d.get("humidity"),
-            "device_id":   d.get("device_id"),
-            "timestamp":   ts,
-        })
+        query = (
+            db.collection("telemetry")
+            .where("timestamp", ">=", cutoff)
+            .order_by("timestamp", direction=firestore.Query.ASCENDING)
+            .limit(500)
+        )
 
-    return jsonify({"data": records, "count": len(records)})
+        records = []
+        for doc in query.stream():
+            d  = doc.to_dict()
+            ts = d.get("timestamp")
+            if hasattr(ts, "isoformat"):
+                ts = ts.isoformat()
+            records.append({
+                "temperature": d.get("temperature"),
+                "humidity":    d.get("humidity"),
+                "device_id":   d.get("device_id"),
+                "timestamp":   ts,
+            })
+
+        return jsonify({"data": records, "count": len(records)})
+    except Exception as exc:
+        logger.error("History endpoint error: %s", exc)
+        return jsonify({"error": f"History query failed: {exc}"}), 500
 
 
 # ── 3. Stats ──────────────────────────────────────────────────
@@ -171,31 +178,38 @@ def stats():
     GET /api/stats
     Statistik hari ini: min, max, avg, count.
     """
-    now         = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 503
 
-    query   = (
-        db.collection("telemetry")
-        .where("timestamp", ">=", today_start)
-        .order_by("timestamp")
-    )
-    records = [doc.to_dict() for doc in query.stream()]
+    try:
+        now         = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    if not records:
-        return jsonify({"count": 0})
+        query   = (
+            db.collection("telemetry")
+            .where("timestamp", ">=", today_start)
+            .order_by("timestamp")
+        )
+        records = [doc.to_dict() for doc in query.stream()]
 
-    temps  = [r["temperature"] for r in records if "temperature" in r]
-    humids = [r["humidity"]    for r in records if "humidity"    in r]
+        if not records:
+            return jsonify({"count": 0})
 
-    return jsonify({
-        "count":        len(records),
-        "temp_min":     round(min(temps), 2),
-        "temp_max":     round(max(temps), 2),
-        "temp_avg":     round(sum(temps) / len(temps), 2),
-        "humidity_min": round(min(humids), 2),
-        "humidity_max": round(max(humids), 2),
-        "humidity_avg": round(sum(humids) / len(humids), 2),
-    })
+        temps  = [r["temperature"] for r in records if "temperature" in r]
+        humids = [r["humidity"]    for r in records if "humidity"    in r]
+
+        return jsonify({
+            "count":        len(records),
+            "temp_min":     round(min(temps), 2),
+            "temp_max":     round(max(temps), 2),
+            "temp_avg":     round(sum(temps) / len(temps), 2),
+            "humidity_min": round(min(humids), 2),
+            "humidity_max": round(max(humids), 2),
+            "humidity_avg": round(sum(humids) / len(humids), 2),
+        })
+    except Exception as exc:
+        logger.error("Stats endpoint error: %s", exc)
+        return jsonify({"error": f"Stats query failed: {exc}"}), 500
 
 
 # ── 4. Weather ────────────────────────────────────────────────
