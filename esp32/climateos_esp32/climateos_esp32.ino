@@ -35,8 +35,8 @@
 #define WIFI_SSID        "om bob meresahkan"
 #define WIFI_PASSWORD    "ayamgeprek"
 
-// URL endpoint Firebase kamu (ganti YOUR_PROJECT_ID)
-#define API_ENDPOINT     "https://climateos-backend.onrender.com/"
+// URL endpoint backend Render kamu
+#define API_ENDPOINT     "https://climateos-backend.onrender.com/api/telemetry"
 
 // ID unik untuk perangkat ini (bebas diisi apa saja)
 #define DEVICE_ID        "esp32-kamar-01"
