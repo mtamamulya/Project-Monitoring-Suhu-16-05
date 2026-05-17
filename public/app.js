@@ -322,34 +322,31 @@ function startClock() {
   }, 1000);
 }
 
-// ── API CALLS ─────────────────────────────────────────────────────────────────
-
 /**
- * Send a mock telemetry reading (simulate ESP32).
- * In production, the ESP32 would POST directly to /api/telemetry.
+ * Fetch the latest telemetry reading from history to update gauges.
+ * The real ESP32 sends data directly to /api/telemetry.
  */
-async function sendMockTelemetry() {
-  const payload = MockESP32.generate();
+async function fetchLatestTelemetry() {
   try {
-    const res = await fetch(`${CONFIG.API_BASE_URL}/api/telemetry`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`Telemetry POST failed: ${res.status}`);
+    const res = await fetch(`${CONFIG.API_BASE_URL}/api/history?range=live`);
+    if (!res.ok) throw new Error(`Latest fetch failed: ${res.status}`);
+    const { data } = await res.json();
 
-    // Update UI immediately with local mock data
-    State.latestTemp = payload.temperature;
-    State.latestHum = payload.humidity;
-    updateGauge(DOM.gaugeTempArc, DOM.gaugeTempValue, payload.temperature, CONFIG.TEMP_MIN, CONFIG.TEMP_MAX);
-    updateGauge(DOM.gaugeHumArc, DOM.gaugeHumValue, payload.humidity, 0, 100);
-    applyBadge(DOM.badgeTemp, getTempBadgeConfig(payload.temperature));
-    applyBadge(DOM.badgeHum, getHumBadgeConfig(payload.humidity));
+    if (data && data.length > 0) {
+      const latest = data[data.length - 1]; // newest record
+      State.latestTemp = latest.temperature;
+      State.latestHum = latest.humidity;
 
-    if (State.outdoorTemp !== null) {
-      updateCompareWidget(payload.temperature, payload.humidity, State.outdoor);
+      updateGauge(DOM.gaugeTempArc, DOM.gaugeTempValue, latest.temperature, CONFIG.TEMP_MIN, CONFIG.TEMP_MAX);
+      updateGauge(DOM.gaugeHumArc, DOM.gaugeHumValue, latest.humidity, 0, 100);
+      applyBadge(DOM.badgeTemp, getTempBadgeConfig(latest.temperature));
+      applyBadge(DOM.badgeHum, getHumBadgeConfig(latest.humidity));
+
+      if (State.outdoor) {
+        updateCompareWidget(latest.temperature, latest.humidity, State.outdoor);
+      }
+      DOM.lastUpdated.textContent = formatTime();
     }
-    DOM.lastUpdated.textContent = formatTime();
   } catch (err) {
     console.warn('[Telemetry]', err.message);
   }
@@ -604,11 +601,11 @@ function attachEventListeners() {
 
 // ── POLLING INTERVALS ─────────────────────────────────────────────────────────
 function startPolling() {
-  // Telemetry (mock ESP32 + history)
-  sendMockTelemetry();
+  // Telemetry — read latest from real ESP32 data
+  fetchLatestTelemetry();
   fetchHistory();
   setInterval(() => {
-    sendMockTelemetry();
+    fetchLatestTelemetry();
     fetchHistory(State.chartRange);
   }, CONFIG.POLL_INTERVAL_MS);
 
