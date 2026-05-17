@@ -63,7 +63,11 @@ def _require_env(name: str) -> str:
 # ── Health check ──────────────────────────────────────────────
 @app.route("/", methods=["GET"])
 def index():
-    return jsonify({"status": "ClimateOS backend running", "time": datetime.now(timezone.utc).isoformat()})
+    return jsonify({
+        "status": "ClimateOS backend running",
+        "firebase": "connected" if db is not None else "NOT connected",
+        "time": datetime.now(timezone.utc).isoformat(),
+    })
 
 
 # ── 1. Telemetry Ingestion ────────────────────────────────────
@@ -73,6 +77,9 @@ def telemetry():
     POST /api/telemetry
     Body: { "temperature": float, "humidity": float, "device_id": str }
     """
+    if db is None:
+        return jsonify({"error": "Database not connected. Check FIREBASE_SERVICE_ACCOUNT_JSON."}), 503
+
     body = request.get_json(silent=True) or {}
 
     # Validasi
