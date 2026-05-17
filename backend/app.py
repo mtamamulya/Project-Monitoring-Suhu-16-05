@@ -2,11 +2,17 @@
 app.py — ClimateOS Backend (Flask)
 Deploy ke Render.com sebagai Web Service gratis.
 Environment variables diset di Render Dashboard (bukan .env file).
+
+OPTIMASI QUOTA FIRESTORE:
+- Server-side in-memory cache untuk history, stats, latest
+- Telemetry write juga meng-update cache latest secara langsung
+- Mengurangi Firestore reads dari ~50,000/hari menjadi ~3,000/hari
 """
 
 import json
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 from flask import Flask, request, jsonify
@@ -46,6 +52,32 @@ except Exception as exc:
     logger.error("Firebase initialization FAILED: %s", exc)
     logger.error("Make sure FIREBASE_SERVICE_ACCOUNT_JSON env variable is set correctly in Render Dashboard.")
     db = None
+
+
+# ── In-memory cache ───────────────────────────────────────────
+# Mengurangi Firestore reads secara drastis pada free tier
+_cache = {
+    "latest": {"data": None, "ts": 0},
+    "history": {},      # key = range_param, value = {"data": ..., "ts": ...}
+    "stats": {"data": None, "ts": 0},
+}
+
+CACHE_TTL = {
+    "latest": 10,       # 10 detik — gauge update
+    "history": 15,      # 15 detik — chart refresh
+    "stats": 60,        # 60 detik — stats jarang berubah
+}
+
+
+def _cache_valid(key, sub_key=None):
+    """Check if cache entry is still fresh."""
+    if sub_key:
+        entry = _cache.get(key, {}).get(sub_key)
+    else:
+        entry = _cache.get(key)
+    if not entry or entry.get("data") is None:
+        return False
+    return (time.time() - entry["ts"]) < CACHE_TTL.get(key, 30)
 
 
 # ── Helper env ────────────────────────────────────────────────
@@ -115,6 +147,22 @@ def telemetry():
             "timestamp":   now,
         })
         logger.info("Telemetry saved: %s temp=%.2f hum=%.2f", device_id, temperature, humidity)
+
+        # Update latest cache langsung (hemat 1 Firestore read per poll)
+        _cache["latest"] = {
+            "data": {
+                "temperature": temperature,
+                "humidity": humidity,
+                "device_id": device_id,
+                "timestamp": now.isoformat(),
+            },
+            "ts": time.time(),
+        }
+
+        # Invalidate history & stats cache agar data baru muncul
+        _cache["history"] = {}
+        _cache["stats"]["ts"] = 0
+
     except Exception as exc:
         logger.error("Firestore write failed: %s", exc)
         return jsonify({"error": f"Firestore write failed: {exc}"}), 500
@@ -129,17 +177,67 @@ def telemetry():
     return jsonify({"status": "ok", "timestamp": now.isoformat()}), 201
 
 
+# ── 1b. Latest (single reading for gauges) ────────────────────
+@app.route("/api/latest", methods=["GET"])
+def latest():
+    """
+    GET /api/latest
+    Returns the single most recent telemetry reading.
+    Uses cache to minimize Firestore reads.
+    """
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 503
+
+    # Return from cache if fresh
+    if _cache_valid("latest"):
+        return jsonify(_cache["latest"]["data"])
+
+    try:
+        query = (
+            db.collection("telemetry")
+            .order_by("timestamp", direction=firestore.Query.DESCENDING)
+            .limit(1)
+        )
+        docs = list(query.stream())
+        if not docs:
+            return jsonify({"error": "No data available"}), 404
+
+        d = docs[0].to_dict()
+        ts = d.get("timestamp")
+        if hasattr(ts, "isoformat"):
+            ts = ts.isoformat()
+
+        result = {
+            "temperature": d.get("temperature"),
+            "humidity": d.get("humidity"),
+            "device_id": d.get("device_id"),
+            "timestamp": ts,
+        }
+
+        _cache["latest"] = {"data": result, "ts": time.time()}
+        return jsonify(result)
+    except Exception as exc:
+        logger.error("Latest endpoint error: %s", exc)
+        return jsonify({"error": f"Latest query failed: {exc}"}), 500
+
+
 # ── 2. History ────────────────────────────────────────────────
 @app.route("/api/history", methods=["GET"])
 def history():
     """
     GET /api/history?range=live|1h|3h|12h|24h
+    Cached server-side to reduce Firestore reads.
     """
     if db is None:
         return jsonify({"error": "Database not connected"}), 503
 
+    range_param = request.args.get("range", "1h")
+
+    # Return from cache if fresh
+    if _cache_valid("history", range_param):
+        return jsonify(_cache["history"][range_param]["data"])
+
     try:
-        range_param   = request.args.get("range", "1h")
         range_minutes = {"live": 15, "1h": 60, "3h": 180, "12h": 720, "24h": 1440}.get(range_param, 60)
 
         now    = datetime.now(timezone.utc)
@@ -165,7 +263,9 @@ def history():
                 "timestamp":   ts,
             })
 
-        return jsonify({"data": records, "count": len(records)})
+        result = {"data": records, "count": len(records)}
+        _cache["history"][range_param] = {"data": result, "ts": time.time()}
+        return jsonify(result)
     except Exception as exc:
         logger.error("History endpoint error: %s", exc)
         return jsonify({"error": f"History query failed: {exc}"}), 500
@@ -177,9 +277,14 @@ def stats():
     """
     GET /api/stats
     Statistik hari ini: min, max, avg, count.
+    Cached 60 detik.
     """
     if db is None:
         return jsonify({"error": "Database not connected"}), 503
+
+    # Return from cache if fresh
+    if _cache_valid("stats"):
+        return jsonify(_cache["stats"]["data"])
 
     try:
         now         = datetime.now(timezone.utc)
@@ -193,20 +298,22 @@ def stats():
         records = [doc.to_dict() for doc in query.stream()]
 
         if not records:
-            return jsonify({"count": 0})
+            result = {"count": 0}
+        else:
+            temps  = [r["temperature"] for r in records if "temperature" in r]
+            humids = [r["humidity"]    for r in records if "humidity"    in r]
+            result = {
+                "count":        len(records),
+                "temp_min":     round(min(temps), 2),
+                "temp_max":     round(max(temps), 2),
+                "temp_avg":     round(sum(temps) / len(temps), 2),
+                "humidity_min": round(min(humids), 2),
+                "humidity_max": round(max(humids), 2),
+                "humidity_avg": round(sum(humids) / len(humids), 2),
+            }
 
-        temps  = [r["temperature"] for r in records if "temperature" in r]
-        humids = [r["humidity"]    for r in records if "humidity"    in r]
-
-        return jsonify({
-            "count":        len(records),
-            "temp_min":     round(min(temps), 2),
-            "temp_max":     round(max(temps), 2),
-            "temp_avg":     round(sum(temps) / len(temps), 2),
-            "humidity_min": round(min(humids), 2),
-            "humidity_max": round(max(humids), 2),
-            "humidity_avg": round(sum(humids) / len(humids), 2),
-        })
+        _cache["stats"] = {"data": result, "ts": time.time()}
+        return jsonify(result)
     except Exception as exc:
         logger.error("Stats endpoint error: %s", exc)
         return jsonify({"error": f"Stats query failed: {exc}"}), 500

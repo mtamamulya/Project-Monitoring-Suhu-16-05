@@ -13,9 +13,9 @@ const CONFIG = {
   // Contoh: 'https://climateos-backend.onrender.com'
   API_BASE_URL: 'https://climateos-backend.onrender.com',
 
-  POLL_INTERVAL_MS: 15_000,        // Telemetry refresh: 15 seconds
+  POLL_INTERVAL_MS: 30_000,        // Telemetry refresh: 30 seconds (hemat quota)
   WEATHER_INTERVAL_MS: 600_000,    // Outdoor weather: 10 minutes
-  STATS_INTERVAL_MS: 60_000,       // Today's stats: 1 minute
+  STATS_INTERVAL_MS: 120_000,      // Today's stats: 2 minutes (hemat quota)
   CHART_RANGE_DEFAULT: 'live',
   GAUGE_TOTAL_ARC_LENGTH: 188,     // SVG arc path total length
   TEMP_MAX: 50,
@@ -323,17 +323,16 @@ function startClock() {
 }
 
 /**
- * Fetch the latest telemetry reading from history to update gauges.
- * The real ESP32 sends data directly to /api/telemetry.
+ * Fetch the latest telemetry reading to update gauges.
+ * Uses /api/latest which reads only 1 document (hemat quota Firestore).
  */
 async function fetchLatestTelemetry() {
   try {
-    const res = await fetch(`${CONFIG.API_BASE_URL}/api/history?range=live`);
+    const res = await fetch(`${CONFIG.API_BASE_URL}/api/latest`);
     if (!res.ok) throw new Error(`Latest fetch failed: ${res.status}`);
-    const { data } = await res.json();
+    const latest = await res.json();
 
-    if (data && data.length > 0) {
-      const latest = data[data.length - 1]; // newest record
+    if (latest && latest.temperature != null) {
       State.latestTemp = latest.temperature;
       State.latestHum = latest.humidity;
 
