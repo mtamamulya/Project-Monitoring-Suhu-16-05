@@ -29,18 +29,23 @@ CORS(app)  # Izinkan request dari frontend manapun
 # ── Firebase / Firestore init ─────────────────────────────────
 # Render menyimpan isi service account JSON sebagai env variable
 # FIREBASE_SERVICE_ACCOUNT_JSON (string JSON, bukan path file)
-if not firebase_admin._apps:
-    sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
-    if sa_json:
-        import json as _json
-        sa_dict = _json.loads(sa_json)
-        cred = credentials.Certificate(sa_dict)
-        firebase_admin.initialize_app(cred)
-    else:
-        # Fallback: pakai Application Default Credentials (lokal/emulator)
-        firebase_admin.initialize_app()
-
-db = firestore.client()
+try:
+    if not firebase_admin._apps:
+        sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+        if sa_json:
+            sa_dict = json.loads(sa_json)
+            cred = credentials.Certificate(sa_dict)
+            firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized with service account credentials.")
+        else:
+            logger.warning("FIREBASE_SERVICE_ACCOUNT_JSON not set! Trying default credentials...")
+            firebase_admin.initialize_app()
+    db = firestore.client()
+    logger.info("Firestore client ready.")
+except Exception as exc:
+    logger.error("Firebase initialization FAILED: %s", exc)
+    logger.error("Make sure FIREBASE_SERVICE_ACCOUNT_JSON env variable is set correctly in Render Dashboard.")
+    db = None
 
 
 # ── Helper env ────────────────────────────────────────────────
