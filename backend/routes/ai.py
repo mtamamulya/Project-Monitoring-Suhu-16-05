@@ -6,7 +6,7 @@ as a hidden system prompt before forwarding the user message.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 import google.generativeai as genai
 from firebase_admin import firestore
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = "gemini-2.5-flash"
 LAST_N_RECORDS = 50
+WIB = timezone(timedelta(hours=7))  # Waktu Indonesia Barat (UTC+7)
 
 
 def _fetch_context_data() -> dict[str, Any]:
@@ -66,8 +67,17 @@ def _fetch_context_data() -> dict[str, Any]:
         "recent_records": records,
         "today_stats": stats,
         "outdoor_weather": outdoor,
-        "context_generated_at": now.isoformat(),
+        "context_generated_at": datetime.now(WIB).strftime("%Y-%m-%d %H:%M:%S WIB"),
     }
+
+
+def _format_ts_wib(ts) -> str:
+    """Convert a Firestore timestamp to WIB string."""
+    if ts is None:
+        return "N/A"
+    if hasattr(ts, 'astimezone'):
+        return ts.astimezone(WIB).strftime("%H:%M:%S WIB")
+    return str(ts)
 
 
 def _build_system_prompt(context: dict[str, Any]) -> str:
@@ -84,9 +94,16 @@ def _build_system_prompt(context: dict[str, Any]) -> str:
     recent_summary = ""
     if records:
         latest = records[0]
+        ts = latest.get('timestamp', None)
+        ts_str = 'N/A'
+        if ts is not None:
+            if hasattr(ts, 'astimezone'):
+                ts_str = ts.astimezone(WIB).strftime("%H:%M:%S WIB")
+            else:
+                ts_str = str(ts)
         recent_summary = (
             f"Most recent reading: {latest.get('temperature', 'N/A')}°C / "
-            f"{latest.get('humidity', 'N/A')}% at {latest.get('timestamp', 'N/A')}"
+            f"{latest.get('humidity', 'N/A')}% at {ts_str}"
         )
 
     return f"""You are an expert IoT climate analyst and assistant for a Weather & Room Climate Monitoring Dashboard located in Semarang, Indonesia.
@@ -109,12 +126,14 @@ OUTDOOR SEMARANG (OpenWeatherMap):
 INDOOR vs OUTDOOR DELTA (ΔT):
   ΔT = {delta_str}
 
-LAST {len(records)} READINGS (newest first):
+LAST {len(records)} READINGS (newest first, times in WIB/UTC+7):
 {chr(10).join(
-    f"  [{r.get('timestamp', 'N/A')}] {r.get('device_id', '?')}: {r.get('temperature', '?')}°C / {r.get('humidity', '?')}%"
+    f"  [{_format_ts_wib(r.get('timestamp'))}] {r.get('device_id', '?')}: {r.get('temperature', '?')}°C / {r.get('humidity', '?')}%"
     for r in records[:10]
 )}
 --- END CONTEXT ---
+
+IMPORTANT: All timestamps above are in WIB (Waktu Indonesia Barat, UTC+7). Always refer to times in WIB when responding.
 
 You should:
 - Detect anomalies, trends, or concerning patterns from the data above
