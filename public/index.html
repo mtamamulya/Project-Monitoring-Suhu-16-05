@@ -539,6 +539,127 @@
     .theme-toggle .moon-icon{ display: block; }
     html[data-theme="dark"] .theme-toggle .sun-icon{ display: block; }
     html[data-theme="dark"] .theme-toggle .moon-icon{ display: none; }
+
+    /* ══════════════════════════════════════════════════════════════
+       MOBILE RESPONSIVE — tanpa mengubah design desktop
+       ══════════════════════════════════════════════════════════════ */
+
+    /* ── Tablet & below (< 768px) ── */
+    @media (max-width: 767px) {
+      /* Reduce main padding */
+      main.px-6 { padding-left: 16px !important; padding-right: 16px !important; }
+      header .px-6 { padding-left: 16px !important; padding-right: 16px !important; }
+      footer .px-6 { padding-left: 16px !important; padding-right: 16px !important; }
+      main.py-10 { padding-top: 24px !important; padding-bottom: 24px !important; }
+      main.space-y-10 > * + * { margin-top: 24px !important; }
+
+      /* Hero text */
+      h1 { font-size: 28px !important; }
+      .max-w-2xl p { font-size: 14px !important; }
+
+      /* Hero info cards stack */
+      section.flex-wrap > .flex.items-center.gap-3 {
+        flex-direction: column;
+        width: 100%;
+      }
+      section.flex-wrap > .flex.items-center.gap-3 .card-flat {
+        width: 100%;
+        min-width: unset !important;
+      }
+
+      /* Bento grid: 1 col on mobile for gauges + comparison */
+      .grid.grid-cols-2.lg\\:grid-cols-4 {
+        grid-template-columns: 1fr 1fr !important;
+      }
+
+      /* Gauge SVG scale down */
+      #gauge-temp, #gauge-hum {
+        width: 150px !important;
+        height: 110px !important;
+      }
+
+      /* Microclimate comparison card */
+      .col-span-2 { grid-column: span 2 !important; }
+      .num-hero { font-size: 36px !important; }
+      .num-xl  { font-size: 28px !important; }
+      .num-lg  { font-size: 24px !important; }
+      .num-md  { font-size: 18px !important; }
+
+      /* Stats grid: 2 cols on tablet */
+      section .grid.grid-cols-2.lg\\:grid-cols-4 {
+        grid-template-columns: 1fr 1fr !important;
+      }
+
+      /* Chart height */
+      .chart-wrapper { height: 220px !important; }
+
+      /* Chat area */
+      #chat-messages { height: 260px !important; }
+
+      /* Reduce card padding */
+      .p-6 { padding: 16px !important; }
+      .p-5 { padding: 14px !important; }
+
+      /* Segmented control scroll */
+      .seg { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .seg-btn { white-space: nowrap; padding: 5px 10px; font-size: 12px; }
+    }
+
+    /* ── Small phones (< 480px) ── */
+    @media (max-width: 479px) {
+      /* Header compact */
+      header .py-3 { padding-top: 8px !important; padding-bottom: 8px !important; }
+      header .leading-tight div:last-child { display: none; } /* hide subtitle */
+
+      /* Hero even smaller */
+      h1 { font-size: 24px !important; }
+      .max-w-2xl p { font-size: 13px !important; }
+      section.flex-wrap > .max-w-2xl .badge { font-size: 10px; }
+
+      /* Bento: stack all to 1 col */
+      .grid.grid-cols-2.lg\\:grid-cols-4 {
+        grid-template-columns: 1fr !important;
+      }
+      .col-span-2 { grid-column: span 1 !important; }
+
+      /* Gauge even smaller */
+      #gauge-temp, #gauge-hum {
+        width: 130px !important;
+        height: 95px !important;
+      }
+
+      /* Numbers */
+      .num-hero { font-size: 30px !important; }
+      .num-xl  { font-size: 24px !important; }
+
+      /* Microclimate grid — stack vertical */
+      .grid.grid-cols-\\[1fr_auto_1fr\\] {
+        grid-template-columns: 1fr !important;
+        text-align: center !important;
+      }
+      .grid.grid-cols-\\[1fr_auto_1fr\\] .text-right {
+        text-align: center !important;
+      }
+      .grid.grid-cols-\\[1fr_auto_1fr\\] > div:nth-child(2) {
+        flex-direction: row !important;
+      }
+
+      /* Outdoor stats 1 col */
+      .grid.grid-cols-3 {
+        grid-template-columns: 1fr 1fr 1fr !important;
+      }
+
+      /* Chart */
+      .chart-wrapper { height: 180px !important; }
+
+      /* Chat input */
+      #chat-input { font-size: 14px; padding: 9px 12px; }
+      .btn-primary { padding: 8px 10px; font-size: 12px; }
+
+      /* Footer compact */
+      footer .py-6 { padding-top: 12px !important; padding-bottom: 12px !important; }
+      footer .flex-wrap { flex-direction: column; align-items: flex-start; gap: 8px !important; }
+    }
   </style>
 </head>
 
