@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,396 +8,957 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Theme bootstrap: apply before paint to avoid flash -->
+  <script>
+    (function(){
+      try{
+        var saved = localStorage.getItem('climateos-theme');
+        var prefers = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = saved || (prefers ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      }catch(e){}
+    })();
+  </script>
 
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
-            display: ['Syne', 'sans-serif'],
-            mono: ['DM Mono', 'monospace'],
-            body: ['DM Sans', 'sans-serif'],
+            sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
           },
-          colors: {
-            zinc: {
-              950: '#09090b',
-              925: '#0f0f11',
-            }
-          }
         }
       }
     }
   </script>
 
   <style>
-    * { box-sizing: border-box; }
+    /* ─── LIGHT (default) ─── */
+    :root, html[data-theme="light"]{
+      /* Surfaces */
+      --bg:        #FAFAF9;
+      --bg-2:      #F4F4F2;
+      --card:      #FFFFFF;
+      --hair:      #ECECEA;
+      --hair-2:    #F2F2F0;
 
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: #09090b;
-      background-image:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(120,80,255,0.06) 0%, transparent 70%),
-        radial-gradient(ellipse 60% 40% at 90% 80%, rgba(255,140,50,0.04) 0%, transparent 60%);
-      min-height: 100vh;
+      /* Ink */
+      --ink:       #0A0A0B;
+      --ink-2:     #27272A;
+      --muted:     #6B7280;
+      --muted-2:   #9CA3AF;
+
+      /* Accents — restrained */
+      --teal:      oklch(0.55 0.10 195);
+      --teal-soft: oklch(0.95 0.025 195);
+      --coral:     oklch(0.62 0.16 25);
+      --coral-soft:oklch(0.96 0.03 25);
+      --sky:       oklch(0.58 0.13 235);
+      --sky-soft:  oklch(0.96 0.03 235);
+      --emerald:   oklch(0.60 0.13 155);
+      --emerald-soft: oklch(0.96 0.04 155);
+      --amber:     oklch(0.74 0.13 75);
+      --amber-soft:oklch(0.97 0.04 75);
+      --crit:      oklch(0.58 0.20 28);
+      --crit-soft: oklch(0.96 0.04 28);
+
+      /* Logo gradient stops */
+      --logo-from: #18181B;
+      --logo-to:   #0A0A0B;
+      --logo-glow: oklch(0.65 0.10 195 / 0.35);
+
+      /* Body background layered gradient */
+      --bg-image:
+        radial-gradient(ellipse 60% 50% at 8% 0%,   oklch(0.94 0.05 30 / 0.55)  0%, transparent 55%),
+        radial-gradient(ellipse 55% 45% at 92% 4%,  oklch(0.94 0.045 230 / 0.55) 0%, transparent 55%),
+        radial-gradient(ellipse 40% 60% at 100% 45%, oklch(0.95 0.035 195 / 0.5)  0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 0% 85%,  oklch(0.95 0.04 65 / 0.45)   0%, transparent 60%),
+        radial-gradient(ellipse 50% 45% at 100% 100%, oklch(0.95 0.04 165 / 0.45) 0%, transparent 60%),
+        linear-gradient(135deg, oklch(0.98 0.012 60) 0%, oklch(0.98 0.008 80) 35%, oklch(0.97 0.012 220) 100%);
+      --grain-color: rgba(10,10,11,0.025);
+
+      /* Header surface */
+      --header-bg: rgba(250,250,249,0.78);
+
+      /* Gauge track */
+      --gauge-track: #EFEFED;
+
+      /* Scrollbar */
+      --scroll-thumb: #DEDEDA;
+      --scroll-thumb-h: #C5C5C2;
+
+      /* Shadows — Linear-style restrained */
+      --shadow-xs: 0 1px 0 rgba(10,10,11,0.04);
+      --shadow-sm: 0 1px 2px rgba(10,10,11,0.04), 0 0 0 1px rgba(10,10,11,0.04);
+      --shadow:    0 1px 2px rgba(10,10,11,0.04), 0 8px 24px -10px rgba(10,10,11,0.10);
+      --shadow-lg: 0 1px 2px rgba(10,10,11,0.04), 0 24px 48px -16px rgba(10,10,11,0.14);
     }
 
-    /* ── Gauge SVG styles ── */
-    .gauge-track { fill: none; stroke: #27272a; stroke-linecap: round; }
-    .gauge-arc { fill: none; stroke-linecap: round; transition: stroke-dashoffset 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
-    .gauge-glow { filter: drop-shadow(0 0 6px currentColor); }
+    /* ─── DARK ─── */
+    html[data-theme="dark"]{
+      /* Surfaces */
+      --bg:        oklch(0.165 0.010 245);   /* deep navy-black */
+      --bg-2:      oklch(0.205 0.012 245);
+      --card:      oklch(0.215 0.013 245);
+      --hair:      oklch(0.285 0.012 245);
+      --hair-2:    oklch(0.245 0.012 245);
 
-    /* ── Pulse animation for critical state ── */
+      /* Ink */
+      --ink:       oklch(0.985 0.005 245);
+      --ink-2:     oklch(0.880 0.008 245);
+      --muted:     oklch(0.640 0.012 245);
+      --muted-2:   oklch(0.500 0.012 245);
+
+      /* Accents — slightly lifted for dark bg */
+      --teal:      oklch(0.72 0.12 195);
+      --teal-soft: oklch(0.30 0.06 195);
+      --coral:     oklch(0.74 0.14 30);
+      --coral-soft:oklch(0.30 0.07 30);
+      --sky:       oklch(0.72 0.13 235);
+      --sky-soft:  oklch(0.28 0.07 235);
+      --emerald:   oklch(0.72 0.13 155);
+      --emerald-soft: oklch(0.28 0.07 155);
+      --amber:     oklch(0.80 0.13 75);
+      --amber-soft:oklch(0.30 0.06 75);
+      --crit:      oklch(0.72 0.18 28);
+      --crit-soft: oklch(0.30 0.09 28);
+
+      /* Logo gradient stops */
+      --logo-from: oklch(0.40 0.02 245);
+      --logo-to:   oklch(0.22 0.013 245);
+      --logo-glow: oklch(0.72 0.12 195 / 0.45);
+
+      /* Body background — deep atmospheric halos */
+      --bg-image:
+        radial-gradient(ellipse 60% 50% at 8% 0%,   oklch(0.40 0.18 30 / 0.20)  0%, transparent 55%),
+        radial-gradient(ellipse 55% 45% at 92% 4%,  oklch(0.40 0.18 235 / 0.22) 0%, transparent 55%),
+        radial-gradient(ellipse 40% 60% at 100% 45%, oklch(0.45 0.14 195 / 0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 0% 85%,  oklch(0.42 0.16 290 / 0.20) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 45% at 100% 100%, oklch(0.40 0.14 165 / 0.18) 0%, transparent 60%),
+        linear-gradient(135deg, oklch(0.165 0.012 250) 0%, oklch(0.16 0.010 245) 50%, oklch(0.17 0.012 220) 100%);
+      --grain-color: rgba(255,255,255,0.025);
+
+      /* Header surface */
+      --header-bg: oklch(0.17 0.012 245 / 0.72);
+
+      /* Gauge track */
+      --gauge-track: oklch(0.28 0.012 245);
+
+      /* Scrollbar */
+      --scroll-thumb:   oklch(0.34 0.012 245);
+      --scroll-thumb-h: oklch(0.46 0.012 245);
+
+      /* Shadows — softer & deeper for dark surface */
+      --shadow-xs: 0 1px 0 rgba(0,0,0,0.30);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.025);
+      --shadow:    0 1px 2px rgba(0,0,0,0.35), 0 10px 32px -12px rgba(0,0,0,0.55);
+      --shadow-lg: 0 1px 2px rgba(0,0,0,0.35), 0 28px 60px -18px rgba(0,0,0,0.65);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ background:var(--bg); }
+    body{
+      font-family:'Geist', ui-sans-serif, system-ui, sans-serif;
+      color:var(--ink);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-feature-settings:"cv11","ss01","ss03";
+      min-height:100vh;
+      position: relative;
+      background-color: var(--bg);
+      background-image: var(--bg-image);
+      background-attachment: fixed;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+    /* Subtle dotted texture overlay */
+    body::before{
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image: radial-gradient(1px 1px at 24px 24px, var(--grain-color) 1px, transparent 0);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.2));
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.2));
+    }
+    /* Lift main content above the grain overlay */
+    header, main, footer { position: relative; z-index: 1; }
+
+    /* ─── Typography utilities ─── */
+    .tabular { font-variant-numeric: tabular-nums lining-nums; }
+    .label {
+      font-size: 11.5px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .label-strong{
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+    }
+    .mono{ font-family:'JetBrains Mono', monospace; }
+    .text-ink   { color: var(--ink); }
+    .text-ink-2 { color: var(--ink-2); }
+    .text-muted { color: var(--muted); }
+    .text-muted-2 { color: var(--muted-2); }
+
+    /* ─── Cards ─── */
+    .card{
+      background: var(--card);
+      border: 1px solid var(--hair);
+      border-radius: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-elev{
+      background: var(--card);
+      border: 1px solid var(--hair);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+    .card-flat{
+      background: var(--card);
+      border: 1px solid var(--hair);
+      border-radius: 10px;
+    }
+    .divider{ height:1px; background: var(--hair); }
+    .hr-soft{ height:1px; background: var(--hair); border:0; margin: 0; }
+
+    /* ─── Buttons ─── */
+    .btn-ghost{
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 7px 12px;
+      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--hair);
+      color: var(--ink-2);
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: 0.005em;
+      transition: all 0.14s ease;
+      cursor: pointer;
+      box-shadow: var(--shadow-xs);
+    }
+    .btn-ghost:hover{
+      color: var(--ink);
+      border-color: var(--muted-2);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-primary{
+      display:inline-flex; align-items:center; gap: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--bg);
+      border: 1px solid var(--ink);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.005em;
+      transition: all 0.14s ease;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(10,10,11,0.18), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .btn-primary:hover{ opacity: 0.88; }
+    .btn-icon{
+      width: 38px; height: 38px;
+      display:inline-flex; align-items:center; justify-content:center;
+      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--hair);
+      color: var(--ink-2);
+      transition: all 0.14s ease;
+      cursor: pointer;
+    }
+    .btn-icon:hover{ color: var(--ink); border-color: var(--muted-2); }
+
+    /* ─── Pills / badges ─── */
+    .pill{
+      display:inline-flex; align-items:center; gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--hair);
+      background: var(--card);
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--ink-2);
+      line-height: 1.4;
+    }
+    .pill .dot{
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 0 3px var(--emerald-soft);
+    }
+    .badge{
+      display:inline-flex; align-items:center; gap: 4px;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      background: var(--bg-2);
+      color: var(--ink-2);
+      border: 1px solid var(--hair);
+    }
+
+    /* ─── Inputs ─── */
+    .input{
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--hair);
+      border-radius: 9px;
+      padding: 11px 14px;
+      font-family:'Geist', sans-serif;
+      font-size: 14px;
+      color: var(--ink);
+      transition: all 0.14s ease;
+    }
+    .input::placeholder{ color: var(--muted-2); font-weight: 400; }
+    .input:focus{
+      outline: none;
+      border-color: var(--teal);
+      box-shadow: 0 0 0 4px var(--teal-soft);
+    }
+
+    /* ─── Gauge ─── */
+    .gauge-track { fill: none; stroke: var(--gauge-track); stroke-linecap: round; }
+    .gauge-arc   { fill: none; stroke-linecap: round; transition: stroke-dashoffset 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    /* gauge text uses CSS so theme can recolor */
+    #gauge-temp-value, #gauge-hum-value{ fill: var(--ink); }
+    .gauge-unit{ fill: var(--muted); }
+
+    /* ─── Critical pulse ─── */
     @keyframes pulse-ring {
-      0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
-      70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
-      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+      0%   { box-shadow: 0 0 0 0 oklch(0.58 0.20 28 / 0.40); }
+      70%  { box-shadow: 0 0 0 8px oklch(0.58 0.20 28 / 0); }
+      100% { box-shadow: 0 0 0 0 oklch(0.58 0.20 28 / 0); }
     }
-    .badge-critical { animation: pulse-ring 1.5s ease infinite; }
+    .badge-critical{
+      background: var(--crit-soft) !important;
+      color: var(--crit) !important;
+      border-color: oklch(0.85 0.10 28) !important;
+      animation: pulse-ring 1.5s ease infinite;
+    }
 
-    /* ── Mic ripple animation ── */
+    /* ─── Mic ─── */
     @keyframes mic-ripple {
-      0% { transform: scale(1); opacity: 0.8; }
-      100% { transform: scale(2.5); opacity: 0; }
+      0%   { transform: scale(1);   opacity: 0.55; }
+      100% { transform: scale(2.4); opacity: 0; }
     }
     .mic-ripple::before {
-      content: '';
-      position: absolute;
-      inset: 0;
+      content:'';
+      position: absolute; inset: 0;
       border-radius: 50%;
-      background: rgba(239,68,68,0.3);
+      background: oklch(0.58 0.20 28 / 0.4);
       animation: mic-ripple 1s ease-out infinite;
     }
-    .mic-active { color: #ef4444 !important; position: relative; }
+    .mic-active{ color: var(--crit) !important; position: relative; }
 
-    /* ── Chat bubbles ── */
-    .chat-user { background: #27272a; border-radius: 18px 18px 4px 18px; }
-    .chat-ai { background: #18181b; border: 1px solid rgba(139,92,246,0.2); border-radius: 18px 18px 18px 4px; }
+    /* ─── Chat ─── */
+    .chat-user{
+      background: var(--ink);
+      color: var(--bg);
+      border-radius: 16px 16px 4px 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .chat-ai{
+      background: var(--card);
+      color: var(--ink);
+      border: 1px solid var(--hair);
+      border-radius: 16px 16px 16px 4px;
+      box-shadow: var(--shadow-xs);
+    }
 
-    /* ── Scrollbar ── */
-    ::-webkit-scrollbar { width: 4px; }
+    /* ─── Scrollbar ─── */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 8px; border: 2px solid var(--card); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-h); }
 
-    /* ── Stat card hover ── */
-    .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-
-    /* ── Chart container ── */
-    .chart-wrapper { position: relative; height: 260px; }
-
-    /* ── Segmented control ── */
-    .seg-btn { transition: all 0.2s ease; }
-    .seg-btn.active {
-      background: #3f3f46;
-      color: #f4f4f5;
+    /* ─── Stat card hover ─── */
+    .stat-card { transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+    .stat-card:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+      border-color: #DEDEDA;
     }
 
-    /* ── Heartbeat dot ── */
+    /* ─── Chart ─── */
+    .chart-wrapper { position: relative; height: 300px; }
+
+    /* ─── Segmented control ─── */
+    .seg{
+      display: inline-flex;
+      padding: 3px;
+      background: var(--bg-2);
+      border: 1px solid var(--hair);
+      border-radius: 9px;
+      gap: 2px;
+    }
+    .seg-btn{
+      font-size: 12.5px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 6px;
+      color: var(--muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.14s ease;
+      letter-spacing: 0;
+    }
+    .seg-btn:hover{ color: var(--ink-2); }
+    .seg-btn.active{
+      background: var(--card);
+      color: var(--ink);
+      box-shadow: var(--shadow-xs), 0 0 0 1px var(--hair);
+    }
+
+    /* ─── Live dot ─── */
     @keyframes hb-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.2; }
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.9); }
     }
-    .hb-dot { animation: hb-dot 2s ease infinite; }
+    .hb-dot{ animation: hb-dot 2s ease infinite; }
 
-    /* ── Card entrance ── */
+    /* ─── Card entrance ─── */
     @keyframes slide-up {
-      from { opacity: 0; transform: translateY(16px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    .card-enter { animation: slide-up 0.4s ease both; }
+    .card-enter { animation: slide-up 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
-    /* Print styles for PDF export */
+    /* ─── Print ─── */
     @media print {
-      body { background: white !important; }
+      body { background: #fff !important; }
       .no-print { display: none !important; }
       .print-section { break-inside: avoid; }
+      .card, .card-elev { box-shadow: none !important; border: 1px solid #DDD; }
     }
 
-    /* ── Delta arrow ── */
-    .delta-up { color: #f87171; }
-    .delta-down { color: #34d399; }
-    .delta-eq { color: #a1a1aa; }
+    /* ─── Delta arrows ─── */
+    .delta-up   { color: var(--coral); }
+    .delta-down { color: var(--teal); }
+    .delta-eq   { color: var(--muted); }
 
-    /* ── Typing indicator ── */
+    /* ─── Typing dots ─── */
     @keyframes typing-dot {
-      0%, 60%, 100% { transform: translateY(0); }
-      30% { transform: translateY(-4px); }
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30%           { transform: translateY(-4px); opacity: 1; }
+    }
+    .typing-dot{
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--muted); display: inline-block;
     }
     .typing-dot:nth-child(1) { animation: typing-dot 1s ease infinite 0ms; }
     .typing-dot:nth-child(2) { animation: typing-dot 1s ease infinite 150ms; }
     .typing-dot:nth-child(3) { animation: typing-dot 1s ease infinite 300ms; }
+
+    /* ─── Logo mark ─── */
+    .logo-mark{
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--logo-from) 0%, var(--logo-to) 100%);
+      display:flex; align-items:center; justify-content:center;
+      color: #fff;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.06) inset,
+        0 1px 3px rgba(0,0,0,0.12);
+      position: relative;
+    }
+    .logo-mark::after{
+      content:'';
+      position: absolute;
+      inset: 0;
+      border-radius: 8px;
+      background: radial-gradient(120% 100% at 0% 0%, var(--logo-glow) 0%, transparent 55%);
+      pointer-events: none;
+    }
+
+    /* ─── Section overline ─── */
+    .section-rule{ display: flex; align-items: center; gap: 10px; }
+    .section-rule::after{ content:''; flex: 1; height: 1px; background: linear-gradient(to right, var(--hair), transparent); }
+
+    /* ─── Number display sizes (all Geist, no italic) ─── */
+    .num-hero   { font-weight: 600; font-size: 52px;  line-height: 1.0;  letter-spacing: -0.025em; }
+    .num-xl     { font-weight: 600; font-size: 38px;  line-height: 1.0;  letter-spacing: -0.022em; }
+    .num-lg     { font-weight: 600; font-size: 30px;  line-height: 1.0;  letter-spacing: -0.018em; }
+    .num-md     { font-weight: 600; font-size: 22px;  line-height: 1.0;  letter-spacing: -0.012em; }
+
+    /* ─── Soft inset surface for sub-metrics ─── */
+    .inset-surface{
+      background: var(--bg);
+      border: 1px solid var(--hair);
+      border-radius: 8px;
+    }
+
+    /* ─── Subtle background grid behind hero ─── */
+    .grid-overlay{
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(to right, var(--grain-color) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grain-color) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 85%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 85%);
+      pointer-events: none;
+    }
+
+    /* ─── Trend indicators inside stat cards ─── */
+    .trend{
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .trend-up    { background: var(--coral-soft); color: var(--coral); }
+    .trend-down  { background: var(--teal-soft);  color: var(--teal); }
+    .trend-flat  { background: var(--bg-2);       color: var(--muted); }
+
+    /* AI avatar */
+    .ai-avatar{
+      width: 32px; height: 32px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, oklch(0.55 0.10 195), oklch(0.42 0.10 200));
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      box-shadow: var(--shadow-xs);
+    }
+    /* ─── Theme toggle button ─── */
+    .theme-toggle{ position: relative; }
+    .theme-toggle .sun-icon{ display: none; }
+    .theme-toggle .moon-icon{ display: block; }
+    html[data-theme="dark"] .theme-toggle .sun-icon{ display: block; }
+    html[data-theme="dark"] .theme-toggle .moon-icon{ display: none; }
   </style>
 </head>
 
-<body class="text-zinc-100 min-h-screen">
+<body class="min-h-screen">
 
   <!-- ── Header ─────────────────────────────────────────────── -->
-  <header class="sticky top-0 z-50 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl">
-    <div class="max-w-[1440px] mx-auto px-6 py-3 flex items-center justify-between">
+  <header class="sticky top-0 z-50 backdrop-blur-xl" style="background: var(--header-bg); border-bottom: 1px solid var(--hair);">
+    <div class="max-w-[1440px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-orange-400 flex items-center justify-center">
-          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <div class="logo-mark">
+          <svg class="w-3.5 h-3.5 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
           </svg>
         </div>
-        <span class="font-display text-lg font-700 tracking-tight text-zinc-100">ClimateOS</span>
-        <span class="text-zinc-600 font-mono text-xs hidden sm:block">/ semarang</span>
+        <div class="leading-tight">
+          <div class="flex items-baseline gap-2">
+            <span style="font-size: 16px; font-weight: 600; letter-spacing: -0.015em;">ClimateOS</span>
+            <span class="text-muted-2" style="font-size: 13px; font-weight: 400;">/ Semarang</span>
+          </div>
+          <div class="label" style="font-size: 10px; letter-spacing: 0.08em; margin-top: 1px;">ROOM ENVIRONMENT MONITOR</div>
+        </div>
       </div>
 
-      <div class="flex items-center gap-4">
-        <!-- Live heartbeat -->
-        <div class="flex items-center gap-2 text-zinc-500 font-mono text-xs">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 hb-dot"></span>
-          <span id="last-updated">—</span>
+      <div class="flex items-center gap-2.5">
+        <div class="pill">
+          <span class="dot hb-dot"></span>
+          <span>Live</span>
+          <span class="text-muted-2">·</span>
+          <span id="last-updated" class="mono">—</span>
         </div>
-        <!-- Export buttons -->
-        <button id="btn-export-csv" class="no-print hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-all border border-zinc-800">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-          CSV
+        <button id="btn-theme" class="theme-toggle no-print btn-icon" title="Toggle theme" aria-label="Toggle theme">
+          <svg class="sun-icon w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M5.6 18.4l1.1-1.1M17.3 6.7l1.1-1.1" />
+          </svg>
+          <svg class="moon-icon w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
         </button>
-        <button id="btn-export-pdf" class="no-print hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-all border border-zinc-800">
+        <button id="btn-export-csv" class="no-print btn-ghost hidden sm:inline-flex">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+          Export CSV
+        </button>
+        <button id="btn-export-pdf" class="no-print btn-ghost hidden sm:inline-flex">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-          PDF
+          Report
         </button>
       </div>
     </div>
   </header>
 
   <!-- ── Main Content ─────────────────────────────────────────── -->
-  <main class="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+  <main class="max-w-[1440px] mx-auto px-6 py-10 space-y-10 relative">
+    <div class="grid-overlay" style="height: 320px;"></div>
+
+    <!-- ══ HERO ═══════════════════════════════════════════════════ -->
+    <section class="relative flex items-start justify-between gap-6 flex-wrap">
+      <div class="max-w-2xl">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="badge" style="background: var(--emerald-soft); color: var(--emerald); border-color: var(--hair);">
+            <span class="dot" style="width: 5px; height: 5px; background: var(--emerald); box-shadow: none;"></span>
+            All systems operational
+          </span>
+          <span class="label" style="font-size: 10.5px;">Updated continuously</span>
+        </div>
+        <h1 style="font-size: 40px; font-weight: 600; line-height: 1.08; letter-spacing: -0.03em; color: var(--ink);">
+          Real-time room climate intelligence.
+        </h1>
+        <p class="text-muted mt-3" style="font-size: 15px; line-height: 1.55; max-width: 560px;">
+          Continuous indoor temperature and humidity monitoring, benchmarked against current outdoor conditions in Semarang. Powered by ESP32 telemetry and on-device AI analysis.
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="card-flat px-4 py-3 flex items-center gap-3" style="min-width: 200px;">
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--teal-soft); color: var(--teal);">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div class="leading-tight">
+            <div class="label" style="font-size: 10.5px;">Sensors</div>
+            <div style="font-size: 15px; font-weight: 600; color: var(--ink);">2 / 2 nominal</div>
+          </div>
+        </div>
+        <div class="card-flat px-4 py-3 flex items-center gap-3" style="min-width: 200px;">
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--amber-soft); color: var(--amber);">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div class="leading-tight">
+            <div class="label" style="font-size: 10.5px;">Uptime · 30d</div>
+            <div style="font-size: 15px; font-weight: 600; color: var(--ink);">99.94%</div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- ══ ROW 1: Bento Top Grid ═══════════════════════════════════════ -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
 
-      <!-- Temperature Gauge Card -->
-      <div class="card-enter col-span-1 relative bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 flex flex-col items-center justify-between overflow-hidden" style="animation-delay:0ms">
-        <div class="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none rounded-2xl"></div>
-        <div class="w-full flex items-center justify-between mb-1">
-          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Temperature</span>
-          <span id="badge-temp" class="text-xs font-display font-600 px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 transition-all duration-500">—</span>
+      <!-- Temperature Gauge -->
+      <div class="card-enter card-elev col-span-1 p-5" style="animation-delay:0ms">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full" style="background: var(--coral);"></span>
+            <span class="label-strong">Temperature</span>
+          </div>
+          <span id="badge-temp" class="badge tabular">—</span>
         </div>
-        <div class="relative my-1">
-          <svg id="gauge-temp" viewBox="0 0 140 100" width="180" height="130" class="overflow-visible">
-            <!-- Track arc: 210° sweep (from -210° to 30° in SVG terms) -->
-            <path id="gauge-temp-track" class="gauge-track" stroke-width="8" d="M 20 85 A 50 50 0 1 1 120 85" />
-            <path id="gauge-temp-arc" class="gauge-arc gauge-glow" stroke="#f97316" stroke-width="8" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;" />
-            <text id="gauge-temp-value" x="70" y="78" text-anchor="middle" dominant-baseline="middle" font-family="Syne" font-size="22" font-weight="800" fill="#f4f4f5">—</text>
-            <text x="70" y="95" text-anchor="middle" font-family="DM Mono" font-size="7" fill="#71717a">°C</text>
+        <div class="flex flex-col items-center my-1">
+          <svg id="gauge-temp" viewBox="0 0 140 100" width="190" height="140" class="overflow-visible">
+            <defs>
+              <linearGradient id="grad-temp" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%"   stop-color="oklch(0.78 0.10 35)"/>
+                <stop offset="100%" stop-color="oklch(0.60 0.18 25)"/>
+              </linearGradient>
+            </defs>
+            <path id="gauge-temp-track" class="gauge-track" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" />
+            <path id="gauge-temp-arc" class="gauge-arc" stroke="url(#grad-temp)" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;" />
+            <text id="gauge-temp-value" x="70" y="72" text-anchor="middle" dominant-baseline="middle" font-family="Geist" font-size="32" font-weight="600" letter-spacing="-0.5">—</text>
+            <text class="gauge-unit" x="70" y="92" text-anchor="middle" font-family="Geist" font-size="9" font-weight="500" letter-spacing="0.5">CELSIUS</text>
           </svg>
         </div>
-        <div class="w-full flex justify-between text-zinc-600 font-mono text-xs">
-          <span>0°</span><span>50°</span>
+        <div class="w-full flex justify-between text-muted tabular" style="font-size: 10.5px; font-weight: 500;">
+          <span>0°</span><span>25°</span><span>50°</span>
         </div>
       </div>
 
-      <!-- Humidity Gauge Card -->
-      <div class="card-enter col-span-1 relative bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 flex flex-col items-center justify-between overflow-hidden" style="animation-delay:80ms">
-        <div class="absolute inset-0 bg-gradient-to-br from-sky-500/5 to-transparent pointer-events-none rounded-2xl"></div>
-        <div class="w-full flex items-center justify-between mb-1">
-          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Humidity</span>
-          <span id="badge-hum" class="text-xs font-display font-600 px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400">—</span>
+      <!-- Humidity Gauge -->
+      <div class="card-enter card-elev col-span-1 p-5" style="animation-delay:80ms">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full" style="background: var(--sky);"></span>
+            <span class="label-strong">Humidity</span>
+          </div>
+          <span id="badge-hum" class="badge tabular">—</span>
         </div>
-        <div class="relative my-1">
-          <svg id="gauge-hum" viewBox="0 0 140 100" width="180" height="130" class="overflow-visible">
-            <path id="gauge-hum-track" class="gauge-track" stroke-width="8" d="M 20 85 A 50 50 0 1 1 120 85" />
-            <path id="gauge-hum-arc" class="gauge-arc gauge-glow" stroke="#38bdf8" stroke-width="8" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;" />
-            <text id="gauge-hum-value" x="70" y="78" text-anchor="middle" dominant-baseline="middle" font-family="Syne" font-size="22" font-weight="800" fill="#f4f4f5">—</text>
-            <text x="70" y="95" text-anchor="middle" font-family="DM Mono" font-size="7" fill="#71717a">%</text>
+        <div class="flex flex-col items-center my-1">
+          <svg id="gauge-hum" viewBox="0 0 140 100" width="190" height="140" class="overflow-visible">
+            <defs>
+              <linearGradient id="grad-hum" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%"   stop-color="oklch(0.78 0.06 220)"/>
+                <stop offset="100%" stop-color="oklch(0.55 0.13 235)"/>
+              </linearGradient>
+            </defs>
+            <path id="gauge-hum-track" class="gauge-track" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" />
+            <path id="gauge-hum-arc" class="gauge-arc" stroke="url(#grad-hum)" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;" />
+            <text id="gauge-hum-value" x="70" y="72" text-anchor="middle" dominant-baseline="middle" font-family="Geist" font-size="32" font-weight="600" letter-spacing="-0.5">—</text>
+            <text class="gauge-unit" x="70" y="92" text-anchor="middle" font-family="Geist" font-size="9" font-weight="500" letter-spacing="0.5">PERCENT RH</text>
           </svg>
         </div>
-        <div class="w-full flex justify-between text-zinc-600 font-mono text-xs">
-          <span>0%</span><span>100%</span>
+        <div class="w-full flex justify-between text-muted tabular" style="font-size: 10.5px; font-weight: 500;">
+          <span>0%</span><span>50%</span><span>100%</span>
         </div>
       </div>
 
       <!-- Microclimate Comparison Card -->
-      <div class="card-enter col-span-2 relative bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 overflow-hidden" style="animation-delay:160ms">
-        <div class="absolute inset-0 bg-gradient-to-br from-violet-500/4 to-transparent pointer-events-none rounded-2xl"></div>
-        <div class="flex items-center justify-between mb-4">
-          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Microclimate · Indoor vs Outdoor</span>
-          <span class="text-zinc-600 font-mono text-xs">Semarang</span>
-        </div>
+      <div class="card-enter card-elev col-span-2 p-6 relative overflow-hidden" style="animation-delay:160ms">
+        <!-- Subtle gradient backdrop -->
+        <div style="position:absolute; inset:0; pointer-events:none; background: radial-gradient(60% 80% at 0% 0%, var(--coral-soft) 0%, transparent 55%), radial-gradient(60% 80% at 100% 100%, var(--sky-soft) 0%, transparent 55%); opacity: 0.6;"></div>
 
-        <div class="grid grid-cols-3 gap-3 items-center">
-          <!-- Indoor -->
-          <div class="space-y-1">
-            <p class="text-zinc-500 font-mono text-xs">Indoor</p>
-            <p id="compare-indoor-temp" class="font-display font-800 text-4xl text-zinc-100">—</p>
-            <p id="compare-indoor-hum" class="text-zinc-500 font-mono text-xs">—% RH</p>
+        <div class="relative">
+          <div class="flex items-center justify-between mb-5">
+            <div class="flex items-center gap-2">
+              <span class="label-strong">Microclimate Comparison</span>
+              <span class="text-muted-2">·</span>
+              <span class="text-muted" style="font-size: 12.5px;">Indoor vs Outdoor</span>
+            </div>
+            <span class="pill">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="3"/></svg>
+              Semarang · ID
+            </span>
           </div>
 
-          <!-- Delta -->
-          <div class="flex flex-col items-center gap-1">
-            <div id="delta-arrow" class="text-2xl">→</div>
-            <div class="bg-zinc-800/70 rounded-xl px-3 py-1.5 text-center">
-              <p class="text-zinc-500 font-mono text-xs">ΔT</p>
-              <p id="delta-value" class="font-display font-700 text-xl text-zinc-200">—</p>
+          <div class="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
+            <!-- Indoor -->
+            <div>
+              <p class="label mb-1.5">Indoor</p>
+              <p id="compare-indoor-temp" class="num-hero text-ink tabular">—</p>
+              <p id="compare-indoor-hum" class="text-muted tabular mt-2" style="font-size: 13px; font-weight: 500;">— % RH</p>
+            </div>
+
+            <!-- Delta -->
+            <div class="flex flex-col items-center gap-2 px-2">
+              <div id="delta-arrow" class="text-muted-2" style="font-size: 24px; line-height: 1;">→</div>
+              <div class="inset-surface px-3 py-2 text-center min-w-[88px]">
+                <p class="label" style="font-size: 10px;">Δ Temp</p>
+                <p id="delta-value" class="num-md text-ink tabular mt-0.5">—</p>
+              </div>
+            </div>
+
+            <!-- Outdoor -->
+            <div class="text-right">
+              <p class="label mb-1.5">Outdoor</p>
+              <p id="compare-outdoor-temp" class="num-hero text-ink tabular">—</p>
+              <p id="compare-outdoor-desc" class="text-muted tabular mt-2 truncate" style="font-size: 13px; font-weight: 500;">—</p>
             </div>
           </div>
 
-          <!-- Outdoor -->
-          <div class="space-y-1 text-right">
-            <p class="text-zinc-500 font-mono text-xs">Outdoor</p>
-            <p id="compare-outdoor-temp" class="font-display font-800 text-4xl text-zinc-100">—</p>
-            <p id="compare-outdoor-desc" class="text-zinc-500 font-mono text-xs truncate">—</p>
-          </div>
-        </div>
+          <hr class="hr-soft mt-5 mb-4" />
 
-        <!-- Wind / Feels like bar -->
-        <div class="mt-4 pt-3 border-t border-zinc-800/60 flex gap-4 text-xs font-mono text-zinc-500">
-          <span>Feels like <span id="outdoor-feels" class="text-zinc-400">—</span></span>
-          <span>Wind <span id="outdoor-wind" class="text-zinc-400">—</span> m/s</span>
-          <span>Humidity <span id="outdoor-hum" class="text-zinc-400">—</span>%</span>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <p class="label" style="font-size: 10px;">Feels Like</p>
+              <p class="mt-1"><span id="outdoor-feels" class="text-ink tabular" style="font-size: 18px; font-weight: 600; letter-spacing: -0.01em;">—</span></p>
+            </div>
+            <div>
+              <p class="label" style="font-size: 10px;">Wind</p>
+              <p class="mt-1"><span id="outdoor-wind" class="text-ink tabular" style="font-size: 18px; font-weight: 600; letter-spacing: -0.01em;">—</span> <span class="text-muted" style="font-size: 11.5px; font-weight: 500;">m/s</span></p>
+            </div>
+            <div>
+              <p class="label" style="font-size: 10px;">Humidity</p>
+              <p class="mt-1"><span id="outdoor-hum" class="text-ink tabular" style="font-size: 18px; font-weight: 600; letter-spacing: -0.01em;">—</span> <span class="text-muted" style="font-size: 11.5px; font-weight: 500;">%</span></p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ══ ROW 2: Stats + Chart ═══════════════════════════════════════ -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- Min -->
-      <div class="stat-card card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 print-section" style="animation-delay:240ms">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="w-7 h-7 rounded-lg bg-sky-500/10 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+    <!-- ══ SECTION 02: Statistics ══════════════════════════════════════ -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <div class="section-rule" style="max-width: 360px;">
+          <span class="label-strong">Today's statistics</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Min -->
+        <div class="stat-card card-enter card p-5 print-section" style="animation-delay:240ms">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: var(--sky-soft); color: var(--sky);">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+              <span class="label-strong">Minimum</span>
+            </div>
           </div>
-          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Min Temp</span>
+          <p id="stat-min" class="num-xl text-ink tabular">—</p>
+          <hr class="hr-soft mt-4 mb-3" />
+          <p class="text-muted" style="font-size: 12px;">Today's lowest reading</p>
         </div>
-        <p id="stat-min" class="font-display font-800 text-3xl text-zinc-100">—</p>
-        <p class="text-zinc-600 font-mono text-xs mt-1">Today's lowest</p>
-      </div>
 
-      <!-- Max -->
-      <div class="stat-card card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 print-section" style="animation-delay:300ms">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" /></svg>
+        <!-- Max -->
+        <div class="stat-card card-enter card p-5 print-section" style="animation-delay:300ms">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: var(--coral-soft); color: var(--coral);">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" /></svg>
+              </div>
+              <span class="label-strong">Maximum</span>
+            </div>
           </div>
-          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Max Temp</span>
+          <p id="stat-max" class="num-xl text-ink tabular">—</p>
+          <hr class="hr-soft mt-4 mb-3" />
+          <p class="text-muted" style="font-size: 12px;">Today's peak reading</p>
         </div>
-        <p id="stat-max" class="font-display font-800 text-3xl text-zinc-100">—</p>
-        <p class="text-zinc-600 font-mono text-xs mt-1">Today's peak</p>
-      </div>
 
-      <!-- Avg -->
-      <div class="stat-card card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 print-section" style="animation-delay:360ms">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+        <!-- Avg -->
+        <div class="stat-card card-enter card p-5 print-section" style="animation-delay:360ms">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: var(--teal-soft); color: var(--teal);">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+              </div>
+              <span class="label-strong">Average</span>
+            </div>
           </div>
-          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Avg Temp</span>
+          <p id="stat-avg" class="num-xl text-ink tabular">—</p>
+          <hr class="hr-soft mt-4 mb-3" />
+          <p class="text-muted" style="font-size: 12px;">Today's mean temperature</p>
         </div>
-        <p id="stat-avg" class="font-display font-800 text-3xl text-zinc-100">—</p>
-        <p class="text-zinc-600 font-mono text-xs mt-1">Today's average</p>
-      </div>
 
-      <!-- Count -->
-      <div class="stat-card card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-4 print-section" style="animation-delay:420ms">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
+        <!-- Count -->
+        <div class="stat-card card-enter card p-5 print-section" style="animation-delay:420ms">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: var(--emerald-soft); color: var(--emerald);">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
+              </div>
+              <span class="label-strong">Samples</span>
+            </div>
           </div>
-          <span class="text-zinc-500 font-mono text-xs uppercase tracking-wider">Data Points</span>
+          <p id="stat-count" class="num-xl text-ink tabular">—</p>
+          <hr class="hr-soft mt-4 mb-3" />
+          <p class="text-muted" style="font-size: 12px;">Data points logged today</p>
         </div>
-        <p id="stat-count" class="font-display font-800 text-3xl text-zinc-100">—</p>
-        <p class="text-zinc-600 font-mono text-xs mt-1">Recorded today</p>
       </div>
-    </div>
+    </section>
 
-    <!-- ══ ROW 3: Chart ═══════════════════════════════════════════════ -->
-    <div class="card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 print-section" style="animation-delay:480ms">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 class="font-display font-700 text-zinc-100 text-base">Time-Series Analytics</h2>
-          <p class="text-zinc-600 font-mono text-xs mt-0.5">Temperature & Humidity over time</p>
+    <!-- ══ SECTION 03: Chart ═══════════════════════════════════════════════ -->
+    <section>
+      <div class="card-enter card p-6 print-section" style="animation-delay:480ms">
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="label-strong">Time-Series Analytics</span>
+            </div>
+            <h2 class="mt-1" style="font-size: 22px; font-weight: 600; letter-spacing: -0.018em; line-height: 1.2; color: var(--ink);">
+              Temperature and humidity trends
+            </h2>
+            <p class="text-muted mt-1" style="font-size: 13px;">Live measurements aggregated over the selected window.</p>
+          </div>
+          <!-- Segmented time range control -->
+          <div class="seg self-start sm:self-auto">
+            <button class="seg-btn active" data-range="live">Live</button>
+            <button class="seg-btn" data-range="1h">1h</button>
+            <button class="seg-btn" data-range="3h">3h</button>
+            <button class="seg-btn" data-range="12h">12h</button>
+            <button class="seg-btn" data-range="24h">24h</button>
+          </div>
         </div>
-        <!-- Segmented time range control -->
-        <div class="flex gap-1 bg-zinc-800/60 rounded-xl p-1 self-start sm:self-auto">
-          <button class="seg-btn active text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-400" data-range="live">Live</button>
-          <button class="seg-btn text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300" data-range="1h">1h</button>
-          <button class="seg-btn text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300" data-range="3h">3h</button>
-          <button class="seg-btn text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300" data-range="12h">12h</button>
-          <button class="seg-btn text-xs font-mono px-3 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300" data-range="24h">24h</button>
+        <div class="chart-wrapper">
+          <canvas id="climate-chart"></canvas>
+        </div>
+        <!-- Legend -->
+        <div class="flex gap-6 mt-5 justify-center flex-wrap">
+          <div class="flex items-center gap-2">
+            <span class="inline-block rounded-full" style="width: 9px; height: 9px; background: var(--coral); box-shadow: 0 0 0 3px var(--coral-soft);"></span>
+            <span style="font-size: 12.5px; font-weight: 500; color: var(--ink-2);">Temperature</span>
+            <span class="text-muted" style="font-size: 12px;">°C</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block rounded-full" style="width: 9px; height: 9px; background: var(--sky); box-shadow: 0 0 0 3px var(--sky-soft);"></span>
+            <span style="font-size: 12.5px; font-weight: 500; color: var(--ink-2);">Humidity</span>
+            <span class="text-muted" style="font-size: 12px;">%</span>
+          </div>
         </div>
       </div>
-      <div class="chart-wrapper">
-        <canvas id="climate-chart"></canvas>
-      </div>
-      <!-- Legend -->
-      <div class="flex gap-4 mt-3 justify-center">
-        <div class="flex items-center gap-1.5">
-          <span class="w-6 h-0.5 bg-orange-400 rounded inline-block"></span>
-          <span class="text-zinc-500 font-mono text-xs">Temperature (°C)</span>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <span class="w-6 h-0.5 bg-sky-400 rounded inline-block"></span>
-          <span class="text-zinc-500 font-mono text-xs">Humidity (%)</span>
-        </div>
-      </div>
-    </div>
+    </section>
 
-    <!-- ══ ROW 4: AI Chat ══════════════════════════════════════════════ -->
-    <div class="card-enter bg-zinc-900/50 border border-zinc-800/80 rounded-2xl overflow-hidden" style="animation-delay:560ms">
-      <div class="flex items-center gap-3 p-4 border-b border-zinc-800/60">
-        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center flex-shrink-0">
-          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-1" /></svg>
+    <!-- ══ SECTION 04: AI Chat ══════════════════════════════════════════════ -->
+    <section>
+      <div class="card-enter card overflow-hidden" style="animation-delay:560ms">
+        <div class="flex items-center gap-3 p-5" style="border-bottom: 1px solid var(--hair);">
+          <div class="ai-avatar">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-1" /></svg>
+          </div>
+          <div class="leading-tight">
+            <h2 style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink);">
+              Climate Analyst
+            </h2>
+            <p class="text-muted mono" style="font-size: 11.5px;">Gemini 2.5 Flash · live sensor context injected</p>
+          </div>
+          <div class="ml-auto pill">
+            <span class="dot hb-dot"></span>
+            <span>Online</span>
+          </div>
         </div>
-        <div>
-          <h2 class="font-display font-700 text-zinc-100 text-sm">Climate AI Analyst</h2>
-          <p class="text-zinc-600 font-mono text-xs">Powered by Gemini 2.5 Flash · Context-injected with live sensor data</p>
-        </div>
-        <div class="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20">
-          <span class="w-1.5 h-1.5 rounded-full bg-violet-400 hb-dot"></span>
-          <span class="text-violet-400 font-mono text-xs">online</span>
-        </div>
-      </div>
 
-      <!-- Chat messages area -->
-      <div id="chat-messages" class="h-72 overflow-y-auto p-4 space-y-3 scroll-smooth">
-        <!-- Welcome message -->
-        <div class="chat-ai max-w-xl p-3">
-          <p class="text-zinc-300 text-sm leading-relaxed">
-            👋 Hi! I'm your climate analyst. I have access to your <strong class="text-violet-400">live sensor data</strong>, historical trends, and Semarang outdoor conditions. Ask me anything — anomalies, comfort levels, trend analysis, or what's causing the temperature spike.
+        <!-- Chat messages area -->
+        <div id="chat-messages" class="h-80 overflow-y-auto p-6 space-y-4 scroll-smooth" style="background: var(--bg);">
+          <!-- Welcome message -->
+          <div class="flex items-start gap-3 max-w-2xl">
+            <div class="ai-avatar flex-shrink-0" style="width: 28px; height: 28px; border-radius: 7px;">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
+            <div class="chat-ai p-4">
+              <p style="font-size: 14px; line-height: 1.6; color: var(--ink-2);">
+                Good day. I have continuous access to your <strong style="color: var(--ink); font-weight: 600;">live sensor stream</strong>, historical trends, and current Semarang outdoor conditions. Ask me about anomalies, thermal comfort, ventilation, or any deviation from clinical comfort thresholds.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat input -->
+        <div class="p-5" style="border-top: 1px solid var(--hair); background: var(--card);">
+          <div class="flex gap-2 items-center">
+            <input
+              id="chat-input"
+              type="text"
+              placeholder="Ask about thermal comfort, anomalies, or trends…"
+              class="input flex-1 min-w-0"
+              autocomplete="off"
+            />
+            <button id="btn-mic" title="Speech to Text" class="btn-icon">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            </button>
+            <button id="btn-send" class="btn-primary">
+              <span>Send</span>
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          </div>
+          <p class="text-muted-2 mt-2.5" style="font-size: 11.5px;">
+            Press Enter to send · Microphone enabled for voice queries
           </p>
         </div>
       </div>
-
-      <!-- Chat input -->
-      <div class="p-3 border-t border-zinc-800/60">
-        <div class="flex gap-2 items-center bg-zinc-800/50 rounded-xl border border-zinc-700/50 px-3 py-2 focus-within:border-violet-500/50 transition-colors">
-          <input
-            id="chat-input"
-            type="text"
-            placeholder="Ask about your climate data..."
-            class="flex-1 bg-transparent text-zinc-200 text-sm font-body placeholder-zinc-600 outline-none min-w-0"
-            autocomplete="off"
-          />
-          <!-- Mic button -->
-          <button id="btn-mic" title="Speech to Text" class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 transition-all">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-            </svg>
-          </button>
-          <!-- Send button -->
-          <button id="btn-send" class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-violet-600 hover:bg-violet-500 transition-all disabled:opacity-40">
-            <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </button>
-        </div>
-        <p class="text-zinc-700 font-mono text-xs mt-1.5 px-1">Press Enter or click send · Microphone for voice input</p>
-      </div>
-    </div>
+    </section>
 
   </main>
 
   <!-- ── Footer ──────────────────────────────────────────────────── -->
-  <footer class="max-w-[1440px] mx-auto px-6 py-4 mt-2 border-t border-zinc-800/40 flex items-center justify-between text-zinc-700 font-mono text-xs">
-    <span>ClimateOS · ESP32 + Firebase + Gemini</span>
-    <span id="footer-time">—</span>
+  <footer class="max-w-[1440px] mx-auto px-6 mt-6">
+    <div class="divider"></div>
+    <div class="py-6 flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-2.5">
+        <div class="logo-mark" style="width: 22px; height: 22px; border-radius: 6px;">
+          <svg class="w-2.5 h-2.5 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        </div>
+        <span class="text-muted" style="font-size: 12px; font-weight: 500;">ClimateOS · ESP32 + Firebase + Gemini</span>
+      </div>
+      <span class="text-muted-2 mono" style="font-size: 11px;">Engineered in Semarang · 2026</span>
+      <span id="footer-time" class="pill mono">—</span>
+    </div>
   </footer>
 
   <script src="app.js"></script>
+  <script>
+    /* ─── Theme toggle ─── */
+    (function(){
+      var btn = document.getElementById('btn-theme');
+      if(!btn) return;
+      btn.addEventListener('click', function(){
+        var current = document.documentElement.getAttribute('data-theme') || 'light';
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try{ localStorage.setItem('climateos-theme', next); }catch(e){}
+      });
+    })();
+  </script>
 </body>
 </html>
