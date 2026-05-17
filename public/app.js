@@ -22,22 +22,6 @@ const CONFIG = {
   TEMP_MIN: 0,
 };
 
-// ── MOCK DATA (ESP32 Simulator — replace with real API calls in production) ───
-// In production this block is unused; the mock generator feeds /api/telemetry.
-const MockESP32 = {
-  _base: { temp: 28.5, hum: 72 },
-  generate() {
-    this._base.temp += (Math.random() - 0.48) * 0.6;
-    this._base.hum += (Math.random() - 0.5) * 1.5;
-    this._base.temp = Math.max(20, Math.min(40, this._base.temp));
-    this._base.hum = Math.max(40, Math.min(95, this._base.hum));
-    return {
-      temperature: parseFloat(this._base.temp.toFixed(2)),
-      humidity: parseFloat(this._base.hum.toFixed(2)),
-      device_id: 'esp32-sim-01',
-    };
-  },
-};
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 const State = {
