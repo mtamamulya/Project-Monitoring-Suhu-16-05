@@ -106,14 +106,18 @@ def telemetry():
     device_id   = str(device_id)[:64]
 
     # Simpan ke Firestore
-    now = datetime.now(timezone.utc)
-    db.collection("telemetry").add({
-        "temperature": temperature,
-        "humidity":    humidity,
-        "device_id":   device_id,
-        "timestamp":   now,
-    })
-    logger.info("Telemetry saved: %s temp=%.2f hum=%.2f", device_id, temperature, humidity)
+    try:
+        now = datetime.now(timezone.utc)
+        db.collection("telemetry").add({
+            "temperature": temperature,
+            "humidity":    humidity,
+            "device_id":   device_id,
+            "timestamp":   now,
+        })
+        logger.info("Telemetry saved: %s temp=%.2f hum=%.2f", device_id, temperature, humidity)
+    except Exception as exc:
+        logger.error("Firestore write failed: %s", exc)
+        return jsonify({"error": f"Firestore write failed: {exc}"}), 500
 
     # Discord alert (best-effort)
     try:
