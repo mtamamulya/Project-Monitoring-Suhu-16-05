@@ -20,35 +20,26 @@ WIB = timezone(timedelta(hours=7))  # Waktu Indonesia Barat (UTC+7)
 
 def _fetch_context_data() -> dict[str, Any]:
     """
-    Build structured analytical context from Firestore:
-    - Last N telemetry readings
-    - Today's min/max/avg temperature and humidity
-    - Outdoor Semarang weather cache
+    Build structured analytical context from in-memory buffer.
+    Uses 0 Firestore reads — all data comes from app.py's memory buffer.
+    Only outdoor weather still reads from Firestore (cached by weather service).
     """
-    db = firestore.client()
+    from app import _get_buffer_since, _telemetry_buffer, _buffer_lock
+
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # Last N records (ordered by timestamp desc)
-    records_query = (
-        db.collection("telemetry")
-        .order_by("timestamp", direction=firestore.Query.DESCENDING)
-        .limit(LAST_N_RECORDS)
-    )
-    records = [doc.to_dict() for doc in records_query.stream()]
+    # Last N records from memory (newest first)
+    with _buffer_lock:
+        records = list(reversed(_telemetry_buffer[-LAST_N_RECORDS:]))
 
-    # Today's aggregated stats
-    today_query = (
-        db.collection("telemetry")
-        .where("timestamp", ">=", today_start)
-        .order_by("timestamp")
-    )
-    today_records = [doc.to_dict() for doc in today_query.stream()]
+    # Today's records from memory
+    today_records = _get_buffer_since(today_start)
 
     stats = {}
     if today_records:
-        temps = [r["temperature"] for r in today_records if "temperature" in r]
-        humids = [r["humidity"] for r in today_records if "humidity" in r]
+        temps = [r["temperature"] for r in today_records if r.get("temperature") is not None]
+        humids = [r["humidity"] for r in today_records if r.get("humidity") is not None]
         stats = {
             "count": len(today_records),
             "temp_min": round(min(temps), 2) if temps else None,
@@ -59,9 +50,14 @@ def _fetch_context_data() -> dict[str, Any]:
             "humidity_avg": round(sum(humids) / len(humids), 2) if humids else None,
         }
 
-    # Outdoor weather cache
-    outdoor_doc = db.collection("_system").document("weather_cache").get()
-    outdoor = outdoor_doc.to_dict() if outdoor_doc.exists else {}
+    # Outdoor weather cache (still from Firestore, but cached by weather service)
+    outdoor = {}
+    try:
+        db = firestore.client()
+        outdoor_doc = db.collection("_system").document("weather_cache").get()
+        outdoor = outdoor_doc.to_dict() if outdoor_doc.exists else {}
+    except Exception:
+        pass
 
     return {
         "recent_records": records,

@@ -1,18 +1,18 @@
 """
 app.py — ClimateOS Backend (Flask)
 Deploy ke Render.com sebagai Web Service gratis.
-Environment variables diset di Render Dashboard (bukan .env file).
 
-OPTIMASI QUOTA FIRESTORE:
-- Server-side in-memory cache untuk history, stats, latest
-- Telemetry write juga meng-update cache latest secara langsung
-- Mengurangi Firestore reads dari ~50,000/hari menjadi ~3,000/hari
+OPTIMASI QUOTA FIRESTORE (v2 — In-Memory Buffer):
+- Semua data telemetry disimpan di memory (ring buffer 24 jam)
+- Endpoint history/stats/latest dilayani 100% dari memory → 0 Firestore reads
+- Firestore hanya dipakai untuk WRITE (persist) dan bootstrap saat cold start
+- Estimasi usage: ~6,000 reads/hari (hanya bootstrap + weather + AI)
 """
 
 import json
 import logging
 import os
-import time
+import threading
 from datetime import datetime, timedelta, timezone
 
 from flask import Flask, request, jsonify
@@ -33,8 +33,6 @@ app = Flask(__name__)
 CORS(app)  # Izinkan request dari frontend manapun
 
 # ── Firebase / Firestore init ─────────────────────────────────
-# Render menyimpan isi service account JSON sebagai env variable
-# FIREBASE_SERVICE_ACCOUNT_JSON (string JSON, bukan path file)
 try:
     if not firebase_admin._apps:
         sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
@@ -44,40 +42,81 @@ try:
             firebase_admin.initialize_app(cred)
             logger.info("Firebase initialized with service account credentials.")
         else:
-            logger.warning("FIREBASE_SERVICE_ACCOUNT_JSON not set! Trying default credentials...")
+            logger.warning("FIREBASE_SERVICE_ACCOUNT_JSON not set!")
             firebase_admin.initialize_app()
     db = firestore.client()
     logger.info("Firestore client ready.")
 except Exception as exc:
     logger.error("Firebase initialization FAILED: %s", exc)
-    logger.error("Make sure FIREBASE_SERVICE_ACCOUNT_JSON env variable is set correctly in Render Dashboard.")
     db = None
 
 
-# ── In-memory cache ───────────────────────────────────────────
-# Mengurangi Firestore reads secara drastis pada free tier
-_cache = {
-    "latest": {"data": None, "ts": 0},
-    "history": {},      # key = range_param, value = {"data": ..., "ts": ...}
-    "stats": {"data": None, "ts": 0},
-}
-
-CACHE_TTL = {
-    "latest": 10,       # 10 detik — gauge update
-    "history": 15,      # 15 detik — chart refresh
-    "stats": 60,        # 60 detik — stats jarang berubah
-}
+# ══════════════════════════════════════════════════════════════
+#  IN-MEMORY TELEMETRY BUFFER
+#  Menyimpan data di RAM → endpoint read GRATIS (0 Firestore reads)
+# ══════════════════════════════════════════════════════════════
+_buffer_lock = threading.Lock()
+_telemetry_buffer = []       # List of dicts, sorted by timestamp ASC
+MAX_BUFFER_SIZE = 5760       # 24 jam @ 15 detik interval
+_buffer_bootstrapped = False
 
 
-def _cache_valid(key, sub_key=None):
-    """Check if cache entry is still fresh."""
-    if sub_key:
-        entry = _cache.get(key, {}).get(sub_key)
-    else:
-        entry = _cache.get(key)
-    if not entry or entry.get("data") is None:
-        return False
-    return (time.time() - entry["ts"]) < CACHE_TTL.get(key, 30)
+def _bootstrap_buffer():
+    """Load last 24h of data from Firestore into memory (one-time on cold start)."""
+    global _buffer_bootstrapped
+    if _buffer_bootstrapped or db is None:
+        return
+
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        query = (
+            db.collection("telemetry")
+            .where("timestamp", ">=", cutoff)
+            .order_by("timestamp", direction=firestore.Query.ASCENDING)
+            .limit(MAX_BUFFER_SIZE)
+        )
+        docs = list(query.stream())
+        with _buffer_lock:
+            for doc in docs:
+                d = doc.to_dict()
+                ts = d.get("timestamp")
+                _telemetry_buffer.append({
+                    "temperature": d.get("temperature"),
+                    "humidity": d.get("humidity"),
+                    "device_id": d.get("device_id"),
+                    "timestamp": ts,
+                })
+        _buffer_bootstrapped = True
+        logger.info("Buffer bootstrapped with %d records from Firestore.", len(docs))
+    except Exception as exc:
+        logger.error("Buffer bootstrap failed: %s", exc)
+        _buffer_bootstrapped = True  # Don't retry forever
+
+
+def _add_to_buffer(record: dict):
+    """Add a new telemetry record to the in-memory buffer."""
+    with _buffer_lock:
+        _telemetry_buffer.append(record)
+        # Trim to max size
+        while len(_telemetry_buffer) > MAX_BUFFER_SIZE:
+            _telemetry_buffer.pop(0)
+
+
+def _get_buffer_since(cutoff_dt) -> list:
+    """Get records from buffer since cutoff datetime."""
+    with _buffer_lock:
+        return [
+            r for r in _telemetry_buffer
+            if r.get("timestamp") and r["timestamp"] >= cutoff_dt
+        ]
+
+
+def _get_latest_from_buffer() -> dict | None:
+    """Get the most recent record from buffer."""
+    with _buffer_lock:
+        if _telemetry_buffer:
+            return _telemetry_buffer[-1].copy()
+    return None
 
 
 # ── Helper env ────────────────────────────────────────────────
@@ -88,6 +127,13 @@ def _require_env(name: str) -> str:
     return value
 
 
+# ── Serialize timestamp helper ────────────────────────────────
+def _serialize_ts(ts):
+    if hasattr(ts, "isoformat"):
+        return ts.isoformat()
+    return str(ts) if ts else None
+
+
 # ══════════════════════════════════════════════════════════════
 #  ROUTES
 # ══════════════════════════════════════════════════════════════
@@ -95,9 +141,12 @@ def _require_env(name: str) -> str:
 # ── Health check ──────────────────────────────────────────────
 @app.route("/", methods=["GET"])
 def index():
+    with _buffer_lock:
+        buf_size = len(_telemetry_buffer)
     return jsonify({
         "status": "ClimateOS backend running",
         "firebase": "connected" if db is not None else "NOT connected",
+        "buffer_size": buf_size,
         "time": datetime.now(timezone.utc).isoformat(),
     })
 
@@ -105,16 +154,11 @@ def index():
 # ── 1. Telemetry Ingestion ────────────────────────────────────
 @app.route("/api/telemetry", methods=["POST"])
 def telemetry():
-    """
-    POST /api/telemetry
-    Body: { "temperature": float, "humidity": float, "device_id": str }
-    """
     if db is None:
-        return jsonify({"error": "Database not connected. Check FIREBASE_SERVICE_ACCOUNT_JSON."}), 503
+        return jsonify({"error": "Database not connected."}), 503
 
     body = request.get_json(silent=True) or {}
 
-    # Validasi
     errors = []
     temperature = body.get("temperature")
     humidity    = body.get("humidity")
@@ -124,22 +168,20 @@ def telemetry():
         errors.append("Missing field: temperature")
     elif not isinstance(temperature, (int, float)) or not (-50 <= float(temperature) <= 100):
         errors.append("temperature harus angka antara -50 dan 100")
-
     if humidity is None:
         errors.append("Missing field: humidity")
     elif not isinstance(humidity, (int, float)) or not (0 <= float(humidity) <= 100):
         errors.append("humidity harus angka antara 0 dan 100")
-
     if errors:
         return jsonify({"error": "Validation failed", "details": errors}), 400
 
     temperature = round(float(temperature), 2)
     humidity    = round(float(humidity), 2)
     device_id   = str(device_id)[:64]
+    now = datetime.now(timezone.utc)
 
-    # Simpan ke Firestore
+    # 1. Simpan ke Firestore (persist)
     try:
-        now = datetime.now(timezone.utc)
         db.collection("telemetry").add({
             "temperature": temperature,
             "humidity":    humidity,
@@ -147,27 +189,19 @@ def telemetry():
             "timestamp":   now,
         })
         logger.info("Telemetry saved: %s temp=%.2f hum=%.2f", device_id, temperature, humidity)
-
-        # Update latest cache langsung (hemat 1 Firestore read per poll)
-        _cache["latest"] = {
-            "data": {
-                "temperature": temperature,
-                "humidity": humidity,
-                "device_id": device_id,
-                "timestamp": now.isoformat(),
-            },
-            "ts": time.time(),
-        }
-
-        # Invalidate history & stats cache agar data baru muncul
-        _cache["history"] = {}
-        _cache["stats"]["ts"] = 0
-
     except Exception as exc:
         logger.error("Firestore write failed: %s", exc)
         return jsonify({"error": f"Firestore write failed: {exc}"}), 500
 
-    # Discord alert (best-effort)
+    # 2. Simpan ke memory buffer (0 Firestore reads untuk endpoint GET)
+    _add_to_buffer({
+        "temperature": temperature,
+        "humidity": humidity,
+        "device_id": device_id,
+        "timestamp": now,
+    })
+
+    # 3. Discord alert (best-effort)
     try:
         webhook_url = _require_env("DISCORD_WEBHOOK_URL")
         process_alert(temperature, humidity, device_id, webhook_url)
@@ -180,152 +214,66 @@ def telemetry():
 # ── 1b. Latest (single reading for gauges) ────────────────────
 @app.route("/api/latest", methods=["GET"])
 def latest():
-    """
-    GET /api/latest
-    Returns the single most recent telemetry reading.
-    Uses cache to minimize Firestore reads.
-    """
-    if db is None:
-        return jsonify({"error": "Database not connected"}), 503
+    """100% from memory — 0 Firestore reads."""
+    record = _get_latest_from_buffer()
+    if not record:
+        return jsonify({"error": "No data available yet"}), 404
 
-    # Return from cache if fresh
-    if _cache_valid("latest"):
-        return jsonify(_cache["latest"]["data"])
-
-    try:
-        query = (
-            db.collection("telemetry")
-            .order_by("timestamp", direction=firestore.Query.DESCENDING)
-            .limit(1)
-        )
-        docs = list(query.stream())
-        if not docs:
-            return jsonify({"error": "No data available"}), 404
-
-        d = docs[0].to_dict()
-        ts = d.get("timestamp")
-        if hasattr(ts, "isoformat"):
-            ts = ts.isoformat()
-
-        result = {
-            "temperature": d.get("temperature"),
-            "humidity": d.get("humidity"),
-            "device_id": d.get("device_id"),
-            "timestamp": ts,
-        }
-
-        _cache["latest"] = {"data": result, "ts": time.time()}
-        return jsonify(result)
-    except Exception as exc:
-        logger.error("Latest endpoint error: %s", exc)
-        return jsonify({"error": f"Latest query failed: {exc}"}), 500
+    return jsonify({
+        "temperature": record["temperature"],
+        "humidity": record["humidity"],
+        "device_id": record["device_id"],
+        "timestamp": _serialize_ts(record["timestamp"]),
+    })
 
 
 # ── 2. History ────────────────────────────────────────────────
 @app.route("/api/history", methods=["GET"])
 def history():
-    """
-    GET /api/history?range=live|1h|3h|12h|24h
-    Cached server-side to reduce Firestore reads.
-    """
-    if db is None:
-        return jsonify({"error": "Database not connected"}), 503
-
+    """100% from memory — 0 Firestore reads."""
     range_param = request.args.get("range", "1h")
+    range_minutes = {"live": 15, "1h": 60, "3h": 180, "12h": 720, "24h": 1440}.get(range_param, 60)
 
-    # Return from cache if fresh
-    if _cache_valid("history", range_param):
-        return jsonify(_cache["history"][range_param]["data"])
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=range_minutes)
+    records = _get_buffer_since(cutoff)
 
-    try:
-        range_minutes = {"live": 15, "1h": 60, "3h": 180, "12h": 720, "24h": 1440}.get(range_param, 60)
+    result = [{
+        "temperature": r["temperature"],
+        "humidity": r["humidity"],
+        "device_id": r["device_id"],
+        "timestamp": _serialize_ts(r["timestamp"]),
+    } for r in records]
 
-        now    = datetime.now(timezone.utc)
-        cutoff = now - timedelta(minutes=range_minutes)
-
-        query = (
-            db.collection("telemetry")
-            .where("timestamp", ">=", cutoff)
-            .order_by("timestamp", direction=firestore.Query.ASCENDING)
-            .limit(500)
-        )
-
-        records = []
-        for doc in query.stream():
-            d  = doc.to_dict()
-            ts = d.get("timestamp")
-            if hasattr(ts, "isoformat"):
-                ts = ts.isoformat()
-            records.append({
-                "temperature": d.get("temperature"),
-                "humidity":    d.get("humidity"),
-                "device_id":   d.get("device_id"),
-                "timestamp":   ts,
-            })
-
-        result = {"data": records, "count": len(records)}
-        _cache["history"][range_param] = {"data": result, "ts": time.time()}
-        return jsonify(result)
-    except Exception as exc:
-        logger.error("History endpoint error: %s", exc)
-        return jsonify({"error": f"History query failed: {exc}"}), 500
+    return jsonify({"data": result, "count": len(result)})
 
 
 # ── 3. Stats ──────────────────────────────────────────────────
 @app.route("/api/stats", methods=["GET"])
 def stats():
-    """
-    GET /api/stats
-    Statistik hari ini: min, max, avg, count.
-    Cached 60 detik.
-    """
-    if db is None:
-        return jsonify({"error": "Database not connected"}), 503
+    """100% from memory — 0 Firestore reads."""
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    records = _get_buffer_since(today_start)
 
-    # Return from cache if fresh
-    if _cache_valid("stats"):
-        return jsonify(_cache["stats"]["data"])
+    if not records:
+        return jsonify({"count": 0})
 
-    try:
-        now         = datetime.now(timezone.utc)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    temps  = [r["temperature"] for r in records if r.get("temperature") is not None]
+    humids = [r["humidity"]    for r in records if r.get("humidity") is not None]
 
-        query   = (
-            db.collection("telemetry")
-            .where("timestamp", ">=", today_start)
-            .order_by("timestamp")
-        )
-        records = [doc.to_dict() for doc in query.stream()]
-
-        if not records:
-            result = {"count": 0}
-        else:
-            temps  = [r["temperature"] for r in records if "temperature" in r]
-            humids = [r["humidity"]    for r in records if "humidity"    in r]
-            result = {
-                "count":        len(records),
-                "temp_min":     round(min(temps), 2),
-                "temp_max":     round(max(temps), 2),
-                "temp_avg":     round(sum(temps) / len(temps), 2),
-                "humidity_min": round(min(humids), 2),
-                "humidity_max": round(max(humids), 2),
-                "humidity_avg": round(sum(humids) / len(humids), 2),
-            }
-
-        _cache["stats"] = {"data": result, "ts": time.time()}
-        return jsonify(result)
-    except Exception as exc:
-        logger.error("Stats endpoint error: %s", exc)
-        return jsonify({"error": f"Stats query failed: {exc}"}), 500
+    return jsonify({
+        "count":        len(records),
+        "temp_min":     round(min(temps), 2) if temps else None,
+        "temp_max":     round(max(temps), 2) if temps else None,
+        "temp_avg":     round(sum(temps) / len(temps), 2) if temps else None,
+        "humidity_min": round(min(humids), 2) if humids else None,
+        "humidity_max": round(max(humids), 2) if humids else None,
+        "humidity_avg": round(sum(humids) / len(humids), 2) if humids else None,
+    })
 
 
 # ── 4. Weather ────────────────────────────────────────────────
 @app.route("/api/weather", methods=["GET"])
 def weather():
-    """
-    GET /api/weather
-    Cuaca outdoor Semarang (cached 10 menit di Firestore).
-    """
     try:
         api_key = _require_env("OPENWEATHER_API_KEY")
         data    = get_outdoor_weather(api_key)
@@ -341,10 +289,6 @@ def weather():
 # ── 5. AI Chat ────────────────────────────────────────────────
 @app.route("/api/chat", methods=["POST"])
 def chat():
-    """
-    POST /api/chat
-    Body: { "message": string }
-    """
     body         = request.get_json(silent=True) or {}
     user_message = body.get("message", "").strip()
 
@@ -363,7 +307,10 @@ def chat():
         return jsonify({"error": "AI tidak tersedia, coba lagi."}), 500
 
 
-# ── Run ───────────────────────────────────────────────────────
+# ── Bootstrap & Run ───────────────────────────────────────────
+# Load existing data from Firestore into memory on startup
+_bootstrap_buffer()
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
