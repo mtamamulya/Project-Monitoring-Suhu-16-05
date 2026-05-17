@@ -11,7 +11,7 @@
 const CONFIG = {
   // Ganti URL ini dengan URL Render kamu setelah deploy
   // Contoh: 'https://climateos-backend.onrender.com'
-  API_BASE_URL: 'https://YOUR_RENDER_APP_NAME.onrender.com',
+  API_BASE_URL: 'https://climateos-backend.onrender.com',
 
   POLL_INTERVAL_MS: 15_000,        // Telemetry refresh: 15 seconds
   WEATHER_INTERVAL_MS: 600_000,    // Outdoor weather: 10 minutes

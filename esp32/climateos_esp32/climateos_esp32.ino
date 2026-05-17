@@ -32,18 +32,18 @@
 #include <DHT.h>
 
 // ── KONFIGURASI — UBAH BAGIAN INI ────────────────────────────
-#define WIFI_SSID        "NAMA_WIFI_KAMU"
-#define WIFI_PASSWORD    "PASSWORD_WIFI_KAMU"
+#define WIFI_SSID        "om bob meresahkan"
+#define WIFI_PASSWORD    "ayamgeprek"
 
 // URL endpoint Firebase kamu (ganti YOUR_PROJECT_ID)
-#define API_ENDPOINT     "https://YOUR_RENDER_APP_NAME.onrender.com/api/telemetry"
+#define API_ENDPOINT     "https://climateos-backend.onrender.com/"
 
 // ID unik untuk perangkat ini (bebas diisi apa saja)
 #define DEVICE_ID        "esp32-kamar-01"
 
 // Pin dan tipe sensor
 #define DHT_PIN          4
-#define DHT_TYPE         DHT22   // Ganti ke DHT11 jika pakai DHT11
+#define DHT_TYPE         DHT11   // Ganti ke DHT11 jika pakai DHT11
 
 // Interval pengiriman data (dalam milidetik)
 // Default: 15 detik — sesuai polling interval dashboard
