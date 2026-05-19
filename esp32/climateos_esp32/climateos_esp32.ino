@@ -22,6 +22,8 @@
  *  - ArduinoJson by Benoit Blanchon
  *  - WiFiClientSecure (built-in ESP32 core)
  *  - HTTPClient (built-in ESP32 core)
+ *  - Adafruit GFX Library (untuk OLED)
+ *  - Adafruit SSD1306 (untuk OLED)
  * ============================================================
  */
 
@@ -30,6 +32,22 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// ── Konfigurasi OLED SPI 7-Pin ──────────────────────────────
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_MOSI   23 // D1 (SDA)
+#define OLED_CLK    18 // D0 (SCL)
+#define OLED_DC     16 // DC
+#define OLED_CS     5  // CS
+#define OLED_RESET  17 // RES
+
+// Hardware SPI Constructor (Lebih cepat, menggunakan pin SPI default VSPI/HSPI ESP32)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+
 
 // ── KONFIGURASI — UBAH BAGIAN INI ────────────────────────────
 #define WIFI_SSID        "om bob meresahkan"
@@ -190,6 +208,21 @@ void setup() {
   dht.begin();
   Serial.println("[Sensor] DHT22 diinisialisasi pada GPIO " + String(DHT_PIN));
 
+  // Inisialisasi OLED
+  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if(!display.begin(SSD1306_SWITCHCAPVCC)) {
+    Serial.println(F("[OLED] SSD1306 allocation failed"));
+  } else {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.println(F("ClimateOS ESP32"));
+    display.println(F("Starting..."));
+    display.display();
+    Serial.println(F("[OLED] Diinisialisasi"));
+  }
+
   // Sambungkan ke WiFi
   connectWiFi();
 
@@ -220,6 +253,39 @@ void loop() {
       Serial.println("[Sensor] Suhu     : " + String(temperature, 1) + " °C");
       Serial.println("[Sensor] Kelembaban: " + String(humidity, 1) + " %");
 
+      // Menampilkan di OLED
+      display.clearDisplay();
+      display.setTextColor(SSD1306_WHITE);
+      
+      // Menampilkan Suhu
+      display.setTextSize(2);
+      display.setCursor(0, 0);
+      display.print(temperature, 1);
+      display.print((char)247); // Simbol derajat
+      display.println("C");
+
+      // Menampilkan Kelembaban
+      display.setTextSize(1);
+      display.setCursor(0, 25);
+      display.print("Humidity: ");
+      display.print(humidity, 1);
+      display.println(" %");
+
+      // Menampilkan status WiFi
+      display.setCursor(0, 45);
+      if (WiFi.status() == WL_CONNECTED) {
+        display.println("WiFi: OK");
+      } else {
+        display.println("WiFi: Disconn");
+      }
+      
+      // Menampilkan Device ID
+      display.setCursor(0, 55);
+      display.print("ID: ");
+      display.print(DEVICE_ID);
+      
+      display.display();
+
       bool success = sendTelemetry(temperature, humidity);
 
       // LED: nyala solid = OK, kedip cepat = gagal
@@ -232,6 +298,15 @@ void loop() {
         }
       }
     } else {
+      // Menampilkan error di OLED
+      display.clearDisplay();
+      display.setTextSize(1);
+      display.setTextColor(SSD1306_WHITE);
+      display.setCursor(0, 0);
+      display.println("Sensor Error!");
+      display.println("Cek Wiring DHT");
+      display.display();
+
       // Sensor gagal baca — kedip lambat
       for (int i = 0; i < 4; i++) {
         digitalWrite(LED_PIN, !digitalRead(LED_PIN));
