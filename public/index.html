@@ -11,7 +11,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-  <!-- Theme bootstrap: apply before paint to avoid flash -->
   <script>
     (function(){
       try{
@@ -37,1049 +36,1223 @@
   </script>
 
   <style>
-    /* ─── LIGHT (default) ─── */
     :root, html[data-theme="light"]{
-      /* Surfaces */
-      --bg:        #FAFAF9;
-      --bg-2:      #F4F4F2;
-      --card:      #FFFFFF;
-      --hair:      #ECECEA;
-      --hair-2:    #F2F2F0;
-
-      /* Ink */
-      --ink:       #0A0A0B;
-      --ink-2:     #27272A;
-      --muted:     #6B7280;
-      --muted-2:   #9CA3AF;
-
-      /* Accents — restrained */
-      --teal:      oklch(0.55 0.10 195);
-      --teal-soft: oklch(0.95 0.025 195);
-      --coral:     oklch(0.62 0.16 25);
-      --coral-soft:oklch(0.96 0.03 25);
-      --sky:       oklch(0.58 0.13 235);
-      --sky-soft:  oklch(0.96 0.03 235);
-      --emerald:   oklch(0.60 0.13 155);
-      --emerald-soft: oklch(0.96 0.04 155);
-      --amber:     oklch(0.74 0.13 75);
-      --amber-soft:oklch(0.97 0.04 75);
-      --crit:      oklch(0.58 0.20 28);
-      --crit-soft: oklch(0.96 0.04 28);
-
-      /* Logo gradient stops */
-      --logo-from: #18181B;
-      --logo-to:   #0A0A0B;
-      --logo-glow: oklch(0.65 0.10 195 / 0.35);
-
-      /* Body background layered gradient */
+      --bg: #FAFAF9; --bg-2: #F4F4F2; --card: #FFFFFF; --hair: #ECECEA; --hair-2: #F2F2F0;
+      --ink: #0A0A0B; --ink-2: #27272A; --muted: #6B7280; --muted-2: #9CA3AF;
+      --teal: oklch(0.55 0.10 195); --teal-soft: oklch(0.95 0.025 195);
+      --coral: oklch(0.62 0.16 25); --coral-soft: oklch(0.96 0.03 25);
+      --sky: oklch(0.58 0.13 235); --sky-soft: oklch(0.96 0.03 235);
+      --emerald: oklch(0.60 0.13 155); --emerald-soft: oklch(0.96 0.04 155);
+      --amber: oklch(0.74 0.13 75); --amber-soft: oklch(0.97 0.04 75);
+      --crit: oklch(0.58 0.20 28); --crit-soft: oklch(0.96 0.04 28);
+      --logo-from: #18181B; --logo-to: #0A0A0B; --logo-glow: oklch(0.65 0.10 195 / 0.35);
       --bg-image:
-        radial-gradient(ellipse 60% 50% at 8% 0%,   oklch(0.94 0.05 30 / 0.55)  0%, transparent 55%),
-        radial-gradient(ellipse 55% 45% at 92% 4%,  oklch(0.94 0.045 230 / 0.55) 0%, transparent 55%),
-        radial-gradient(ellipse 40% 60% at 100% 45%, oklch(0.95 0.035 195 / 0.5)  0%, transparent 60%),
-        radial-gradient(ellipse 50% 40% at 0% 85%,  oklch(0.95 0.04 65 / 0.45)   0%, transparent 60%),
-        radial-gradient(ellipse 50% 45% at 100% 100%, oklch(0.95 0.04 165 / 0.45) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 8% 0%, oklch(0.94 0.05 30 / 0.55) 0%, transparent 55%),
+        radial-gradient(ellipse 55% 45% at 92% 4%, oklch(0.94 0.045 230 / 0.55) 0%, transparent 55%),
         linear-gradient(135deg, oklch(0.98 0.012 60) 0%, oklch(0.98 0.008 80) 35%, oklch(0.97 0.012 220) 100%);
       --grain-color: rgba(10,10,11,0.025);
-
-      /* Header surface */
-      --header-bg: rgba(250,250,249,0.78);
-
-      /* Gauge track */
+      --header-bg: rgba(250,250,249,0.88);
+      --sidebar-bg: rgba(250,250,249,0.95);
       --gauge-track: #EFEFED;
-
-      /* Scrollbar */
-      --scroll-thumb: #DEDEDA;
-      --scroll-thumb-h: #C5C5C2;
-
-      /* Shadows — Linear-style restrained */
+      --scroll-thumb: #DEDEDA; --scroll-thumb-h: #C5C5C2;
       --shadow-xs: 0 1px 0 rgba(10,10,11,0.04);
       --shadow-sm: 0 1px 2px rgba(10,10,11,0.04), 0 0 0 1px rgba(10,10,11,0.04);
-      --shadow:    0 1px 2px rgba(10,10,11,0.04), 0 8px 24px -10px rgba(10,10,11,0.10);
+      --shadow: 0 1px 2px rgba(10,10,11,0.04), 0 8px 24px -10px rgba(10,10,11,0.10);
       --shadow-lg: 0 1px 2px rgba(10,10,11,0.04), 0 24px 48px -16px rgba(10,10,11,0.14);
     }
 
-    /* ─── DARK ─── */
     html[data-theme="dark"]{
-      /* Surfaces */
-      --bg:        oklch(0.165 0.010 245);   /* deep navy-black */
-      --bg-2:      oklch(0.205 0.012 245);
-      --card:      oklch(0.215 0.013 245);
-      --hair:      oklch(0.285 0.012 245);
-      --hair-2:    oklch(0.245 0.012 245);
-
-      /* Ink */
-      --ink:       oklch(0.985 0.005 245);
-      --ink-2:     oklch(0.880 0.008 245);
-      --muted:     oklch(0.640 0.012 245);
-      --muted-2:   oklch(0.500 0.012 245);
-
-      /* Accents — slightly lifted for dark bg */
-      --teal:      oklch(0.72 0.12 195);
-      --teal-soft: oklch(0.30 0.06 195);
-      --coral:     oklch(0.74 0.14 30);
-      --coral-soft:oklch(0.30 0.07 30);
-      --sky:       oklch(0.72 0.13 235);
-      --sky-soft:  oklch(0.28 0.07 235);
-      --emerald:   oklch(0.72 0.13 155);
-      --emerald-soft: oklch(0.28 0.07 155);
-      --amber:     oklch(0.80 0.13 75);
-      --amber-soft:oklch(0.30 0.06 75);
-      --crit:      oklch(0.72 0.18 28);
-      --crit-soft: oklch(0.30 0.09 28);
-
-      /* Logo gradient stops */
-      --logo-from: oklch(0.40 0.02 245);
-      --logo-to:   oklch(0.22 0.013 245);
-      --logo-glow: oklch(0.72 0.12 195 / 0.45);
-
-      /* Body background — deep atmospheric halos */
+      --bg: oklch(0.165 0.010 245); --bg-2: oklch(0.205 0.012 245); --card: oklch(0.215 0.013 245);
+      --hair: oklch(0.285 0.012 245); --hair-2: oklch(0.245 0.012 245);
+      --ink: oklch(0.985 0.005 245); --ink-2: oklch(0.880 0.008 245);
+      --muted: oklch(0.640 0.012 245); --muted-2: oklch(0.500 0.012 245);
+      --teal: oklch(0.72 0.12 195); --teal-soft: oklch(0.30 0.06 195);
+      --coral: oklch(0.74 0.14 30); --coral-soft: oklch(0.30 0.07 30);
+      --sky: oklch(0.72 0.13 235); --sky-soft: oklch(0.28 0.07 235);
+      --emerald: oklch(0.72 0.13 155); --emerald-soft: oklch(0.28 0.07 155);
+      --amber: oklch(0.80 0.13 75); --amber-soft: oklch(0.30 0.06 75);
+      --crit: oklch(0.72 0.18 28); --crit-soft: oklch(0.30 0.09 28);
+      --logo-from: oklch(0.40 0.02 245); --logo-to: oklch(0.22 0.013 245); --logo-glow: oklch(0.72 0.12 195 / 0.45);
       --bg-image:
-        radial-gradient(ellipse 60% 50% at 8% 0%,   oklch(0.40 0.18 30 / 0.20)  0%, transparent 55%),
-        radial-gradient(ellipse 55% 45% at 92% 4%,  oklch(0.40 0.18 235 / 0.22) 0%, transparent 55%),
-        radial-gradient(ellipse 40% 60% at 100% 45%, oklch(0.45 0.14 195 / 0.18) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 40% at 0% 85%,  oklch(0.42 0.16 290 / 0.20) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 45% at 100% 100%, oklch(0.40 0.14 165 / 0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 8% 0%, oklch(0.40 0.18 30 / 0.20) 0%, transparent 55%),
+        radial-gradient(ellipse 55% 45% at 92% 4%, oklch(0.40 0.18 235 / 0.22) 0%, transparent 55%),
         linear-gradient(135deg, oklch(0.165 0.012 250) 0%, oklch(0.16 0.010 245) 50%, oklch(0.17 0.012 220) 100%);
       --grain-color: rgba(255,255,255,0.025);
-
-      /* Header surface */
-      --header-bg: oklch(0.17 0.012 245 / 0.72);
-
-      /* Gauge track */
+      --header-bg: oklch(0.17 0.012 245 / 0.88);
+      --sidebar-bg: oklch(0.185 0.012 245 / 0.98);
       --gauge-track: oklch(0.28 0.012 245);
-
-      /* Scrollbar */
-      --scroll-thumb:   oklch(0.34 0.012 245);
-      --scroll-thumb-h: oklch(0.46 0.012 245);
-
-      /* Shadows — softer & deeper for dark surface */
+      --scroll-thumb: oklch(0.34 0.012 245); --scroll-thumb-h: oklch(0.46 0.012 245);
       --shadow-xs: 0 1px 0 rgba(0,0,0,0.30);
       --shadow-sm: 0 1px 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.025);
-      --shadow:    0 1px 2px rgba(0,0,0,0.35), 0 10px 32px -12px rgba(0,0,0,0.55);
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 32px -12px rgba(0,0,0,0.55);
       --shadow-lg: 0 1px 2px rgba(0,0,0,0.35), 0 28px 60px -18px rgba(0,0,0,0.65);
     }
-    *{ box-sizing:border-box; }
-    html,body{ background:var(--bg); }
-    body{
-      font-family:'Geist', ui-sans-serif, system-ui, sans-serif;
-      color:var(--ink);
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      color: var(--ink);
       -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      font-feature-settings:"cv11","ss01","ss03";
-      min-height:100vh;
-      position: relative;
+      font-feature-settings: "cv11","ss01","ss03";
+      min-height: 100vh;
       background-color: var(--bg);
       background-image: var(--bg-image);
       background-attachment: fixed;
       transition: background-color 0.3s ease, color 0.3s ease;
     }
-    /* Subtle dotted texture overlay */
-    body::before{
+
+    body::before {
       content: '';
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 0;
       background-image: radial-gradient(1px 1px at 24px 24px, var(--grain-color) 1px, transparent 0);
       background-size: 28px 28px;
       mask-image: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.2));
       -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.2));
     }
-    /* Lift main content above the grain overlay */
-    header, main, footer { position: relative; z-index: 1; }
 
-    /* ─── Typography utilities ─── */
-    .tabular { font-variant-numeric: tabular-nums lining-nums; }
-    .label {
-      font-size: 11.5px;
-      font-weight: 500;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--muted);
+    /* ── App Layout Shell ── */
+    .app-shell {
+      display: flex;
+      min-height: 100vh;
+      position: relative;
     }
-    .label-strong{
-      font-size: 11.5px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: 220px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--hair);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      transition: transform 0.25s ease;
+    }
+
+    .sidebar-header {
+      padding: 20px 16px 16px;
+      border-bottom: 1px solid var(--hair);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 12px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.14s ease;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--muted);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      text-decoration: none;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-2);
       color: var(--ink-2);
     }
-    .mono{ font-family:'JetBrains Mono', monospace; }
-    .text-ink   { color: var(--ink); }
+
+    .nav-item.active {
+      background: var(--bg-2);
+      color: var(--ink);
+      box-shadow: var(--shadow-xs);
+      border: 1px solid var(--hair);
+    }
+
+    .nav-item svg {
+      width: 17px;
+      height: 17px;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    .nav-item.active svg {
+      opacity: 1;
+    }
+
+    .nav-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      padding: 8px 12px 4px;
+    }
+
+    .sidebar-footer {
+      padding: 12px 8px 16px;
+      border-top: 1px solid var(--hair);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* ── Main content area ── */
+    .main-content {
+      flex: 1;
+      margin-left: 220px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Top header ── */
+    .top-header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--hair);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .page-content {
+      flex: 1;
+      padding: 24px 24px 80px;
+    }
+
+    /* ── Bottom nav (mobile) ── */
+    .bottom-nav {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 50;
+      background: var(--sidebar-bg);
+      border-top: 1px solid var(--hair);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .bottom-nav-items {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+    }
+
+    .bnav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 6px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.14s ease;
+      color: var(--muted);
+      background: none;
+      border: none;
+      font-family: 'Geist', sans-serif;
+    }
+
+    .bnav-item svg {
+      width: 22px; height: 22px;
+    }
+
+    .bnav-item span {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+    }
+
+    .bnav-item.active {
+      color: var(--ink);
+    }
+
+    .bnav-item.active svg {
+      stroke-width: 2.5;
+    }
+
+    /* ── Pages ── */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── Typography ── */
+    .tabular { font-variant-numeric: tabular-nums lining-nums; }
+    .label { font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .label-strong { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .text-ink { color: var(--ink); }
     .text-ink-2 { color: var(--ink-2); }
     .text-muted { color: var(--muted); }
     .text-muted-2 { color: var(--muted-2); }
 
-    /* ─── Cards ─── */
-    .card{
-      background: var(--card);
-      border: 1px solid var(--hair);
-      border-radius: 14px;
-      box-shadow: var(--shadow-sm);
-    }
-    .card-elev{
-      background: var(--card);
-      border: 1px solid var(--hair);
-      border-radius: 14px;
-      box-shadow: var(--shadow);
-    }
-    .card-flat{
-      background: var(--card);
-      border: 1px solid var(--hair);
-      border-radius: 10px;
-    }
-    .divider{ height:1px; background: var(--hair); }
-    .hr-soft{ height:1px; background: var(--hair); border:0; margin: 0; }
+    /* ── Cards ── */
+    .card { background: var(--card); border: 1px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow-sm); }
+    .card-elev { background: var(--card); border: 1px solid var(--hair); border-radius: 14px; box-shadow: var(--shadow); }
+    .card-flat { background: var(--card); border: 1px solid var(--hair); border-radius: 10px; }
+    .divider { height: 1px; background: var(--hair); }
+    .hr-soft { height: 1px; background: var(--hair); border: 0; margin: 0; }
 
-    /* ─── Buttons ─── */
-    .btn-ghost{
-      display:inline-flex; align-items:center; gap:6px;
-      padding: 7px 12px;
-      border-radius: 8px;
-      background: var(--card);
-      border: 1px solid var(--hair);
-      color: var(--ink-2);
-      font-size: 12.5px;
-      font-weight: 500;
-      letter-spacing: 0.005em;
-      transition: all 0.14s ease;
-      cursor: pointer;
-      box-shadow: var(--shadow-xs);
+    /* ── Buttons ── */
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 12px; border-radius: 8px; background: var(--card);
+      border: 1px solid var(--hair); color: var(--ink-2);
+      font-size: 12.5px; font-weight: 500; letter-spacing: 0.005em;
+      transition: all 0.14s ease; cursor: pointer; box-shadow: var(--shadow-xs);
+      font-family: 'Geist', sans-serif;
     }
-    .btn-ghost:hover{
-      color: var(--ink);
-      border-color: var(--muted-2);
-      box-shadow: var(--shadow-sm);
-    }
-    .btn-primary{
-      display:inline-flex; align-items:center; gap: 6px;
-      padding: 8px 14px;
-      border-radius: 8px;
-      background: var(--ink);
-      color: var(--bg);
-      border: 1px solid var(--ink);
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: 0.005em;
-      transition: all 0.14s ease;
-      cursor: pointer;
+    .btn-ghost:hover { color: var(--ink); border-color: var(--muted-2); box-shadow: var(--shadow-sm); }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 8px; background: var(--ink);
+      color: var(--bg); border: 1px solid var(--ink);
+      font-size: 13px; font-weight: 500; letter-spacing: 0.005em;
+      transition: all 0.14s ease; cursor: pointer;
       box-shadow: 0 1px 2px rgba(10,10,11,0.18), inset 0 1px 0 rgba(255,255,255,0.08);
+      font-family: 'Geist', sans-serif;
     }
-    .btn-primary:hover{ opacity: 0.88; }
-    .btn-icon{
-      width: 38px; height: 38px;
-      display:inline-flex; align-items:center; justify-content:center;
-      border-radius: 8px;
-      background: var(--card);
-      border: 1px solid var(--hair);
-      color: var(--ink-2);
-      transition: all 0.14s ease;
-      cursor: pointer;
-    }
-    .btn-icon:hover{ color: var(--ink); border-color: var(--muted-2); }
+    .btn-primary:hover { opacity: 0.88; }
 
-    /* ─── Pills / badges ─── */
-    .pill{
-      display:inline-flex; align-items:center; gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid var(--hair);
-      background: var(--card);
-      font-size: 11.5px;
-      font-weight: 500;
-      color: var(--ink-2);
-      line-height: 1.4;
+    .btn-icon {
+      width: 36px; height: 36px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 8px; background: var(--card);
+      border: 1px solid var(--hair); color: var(--ink-2);
+      transition: all 0.14s ease; cursor: pointer; flex-shrink: 0;
     }
-    .pill .dot{
+    .btn-icon:hover { color: var(--ink); border-color: var(--muted-2); }
+
+    /* ── Pills / badges ── */
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 999px;
+      border: 1px solid var(--hair); background: var(--card);
+      font-size: 11.5px; font-weight: 500; color: var(--ink-2); line-height: 1.4;
+    }
+    .pill .dot {
       width: 6px; height: 6px; border-radius: 50%;
-      background: var(--emerald);
-      box-shadow: 0 0 0 3px var(--emerald-soft);
+      background: var(--emerald); box-shadow: 0 0 0 3px var(--emerald-soft);
     }
-    .badge{
-      display:inline-flex; align-items:center; gap: 4px;
-      padding: 3px 9px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.01em;
-      background: var(--bg-2);
-      color: var(--ink-2);
-      border: 1px solid var(--hair);
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 6px;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.01em;
+      background: var(--bg-2); color: var(--ink-2); border: 1px solid var(--hair);
     }
 
-    /* ─── Inputs ─── */
-    .input{
-      width: 100%;
-      background: var(--card);
-      border: 1px solid var(--hair);
-      border-radius: 9px;
-      padding: 11px 14px;
-      font-family:'Geist', sans-serif;
-      font-size: 14px;
-      color: var(--ink);
+    /* ── Input ── */
+    .input {
+      width: 100%; background: var(--card); border: 1px solid var(--hair);
+      border-radius: 9px; padding: 10px 14px;
+      font-family: 'Geist', sans-serif; font-size: 14px; color: var(--ink);
       transition: all 0.14s ease;
     }
-    .input::placeholder{ color: var(--muted-2); font-weight: 400; }
-    .input:focus{
-      outline: none;
-      border-color: var(--teal);
-      box-shadow: 0 0 0 4px var(--teal-soft);
-    }
+    .input::placeholder { color: var(--muted-2); font-weight: 400; }
+    .input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
 
-    /* ─── Gauge ─── */
+    /* ── Gauge ── */
     .gauge-track { fill: none; stroke: var(--gauge-track); stroke-linecap: round; }
-    .gauge-arc   { fill: none; stroke-linecap: round; transition: stroke-dashoffset 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
-    /* gauge text uses CSS so theme can recolor */
-    #gauge-temp-value, #gauge-hum-value{ fill: var(--ink); }
-    .gauge-unit{ fill: var(--muted); }
+    .gauge-arc { fill: none; stroke-linecap: round; transition: stroke-dashoffset 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    #gauge-temp-value, #gauge-hum-value { fill: var(--ink); }
+    .gauge-unit { fill: var(--muted); }
 
-    /* ─── Critical pulse ─── */
+    /* ── Critical pulse ── */
     @keyframes pulse-ring {
-      0%   { box-shadow: 0 0 0 0 oklch(0.58 0.20 28 / 0.40); }
-      70%  { box-shadow: 0 0 0 8px oklch(0.58 0.20 28 / 0); }
+      0% { box-shadow: 0 0 0 0 oklch(0.58 0.20 28 / 0.40); }
+      70% { box-shadow: 0 0 0 8px oklch(0.58 0.20 28 / 0); }
       100% { box-shadow: 0 0 0 0 oklch(0.58 0.20 28 / 0); }
     }
-    .badge-critical{
-      background: var(--crit-soft) !important;
-      color: var(--crit) !important;
+    .badge-critical {
+      background: var(--crit-soft) !important; color: var(--crit) !important;
       border-color: oklch(0.85 0.10 28) !important;
       animation: pulse-ring 1.5s ease infinite;
     }
 
-    /* ─── Mic ─── */
-    @keyframes mic-ripple {
-      0%   { transform: scale(1);   opacity: 0.55; }
-      100% { transform: scale(2.4); opacity: 0; }
-    }
-    .mic-ripple::before {
-      content:'';
-      position: absolute; inset: 0;
+    /* ── Chat floating bubble ── */
+    .chat-fab {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      z-index: 200;
+      width: 52px; height: 52px;
       border-radius: 50%;
-      background: oklch(0.58 0.20 28 / 0.4);
-      animation: mic-ripple 1s ease-out infinite;
-    }
-    .mic-active{ color: var(--crit) !important; position: relative; }
-
-    /* ─── Chat ─── */
-    .chat-user{
       background: var(--ink);
       color: var(--bg);
-      border-radius: 16px 16px 4px 16px;
-      box-shadow: var(--shadow-sm);
+      border: none;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25), 0 1px 4px rgba(0,0,0,0.15);
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    .chat-ai{
+    .chat-fab:hover { transform: scale(1.08); }
+    .chat-fab.open { background: var(--muted); }
+
+    .chat-fab-badge {
+      position: absolute; top: -2px; right: -2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--crit); border: 2px solid var(--bg);
+      display: none;
+    }
+    .chat-fab-badge.show { display: block; }
+
+    .chat-panel {
+      position: fixed;
+      bottom: 88px; right: 24px;
+      z-index: 199;
+      width: min(380px, calc(100vw - 48px));
       background: var(--card);
-      color: var(--ink);
+      border: 1px solid var(--hair);
+      border-radius: 18px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform-origin: bottom right;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+      transform: scale(0.85) translateY(16px);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .chat-panel.open {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .chat-panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--hair);
+      display: flex; align-items: center; gap: 10px;
+      background: var(--card);
+      flex-shrink: 0;
+    }
+
+    .ai-avatar {
+      width: 32px; height: 32px; border-radius: 9px;
+      background: linear-gradient(135deg, oklch(0.55 0.10 195), oklch(0.42 0.10 200));
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; box-shadow: var(--shadow-xs); flex-shrink: 0;
+    }
+
+    #chat-messages {
+      flex: 1;
+      height: 300px;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: var(--bg);
+    }
+
+    .chat-user {
+      background: var(--ink); color: var(--bg);
+      border-radius: 16px 16px 4px 16px;
+      padding: 10px 14px; font-size: 13px; line-height: 1.5;
+      max-width: 85%; align-self: flex-end;
+    }
+
+    .chat-ai {
+      background: var(--card); color: var(--ink);
       border: 1px solid var(--hair);
       border-radius: 16px 16px 16px 4px;
+      padding: 10px 14px; font-size: 13px; line-height: 1.55;
+      max-width: 92%; align-self: flex-start;
       box-shadow: var(--shadow-xs);
     }
 
-    /* ─── Scrollbar ─── */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 8px; border: 2px solid var(--card); }
-    ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-h); }
-
-    /* ─── Stat card hover ─── */
-    .stat-card { transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
-    .stat-card:hover {
-      transform: translateY(-1px);
-      box-shadow: var(--shadow);
-      border-color: #DEDEDA;
-    }
-
-    /* ─── Chart ─── */
-    .chart-wrapper { position: relative; height: 300px; }
-
-    /* ─── Segmented control ─── */
-    .seg{
-      display: inline-flex;
-      padding: 3px;
-      background: var(--bg-2);
-      border: 1px solid var(--hair);
-      border-radius: 9px;
-      gap: 2px;
-    }
-    .seg-btn{
-      font-size: 12.5px;
-      font-weight: 500;
-      padding: 6px 12px;
-      border-radius: 6px;
-      color: var(--muted);
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      transition: all 0.14s ease;
-      letter-spacing: 0;
-    }
-    .seg-btn:hover{ color: var(--ink-2); }
-    .seg-btn.active{
+    .chat-panel-input {
+      padding: 12px;
+      border-top: 1px solid var(--hair);
       background: var(--card);
-      color: var(--ink);
-      box-shadow: var(--shadow-xs), 0 0 0 1px var(--hair);
+      flex-shrink: 0;
     }
 
-    /* ─── Live dot ─── */
-    @keyframes hb-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50%      { opacity: 0.4; transform: scale(0.9); }
+    /* ── Segmented control ── */
+    .seg {
+      display: inline-flex; padding: 3px;
+      background: var(--bg-2); border: 1px solid var(--hair);
+      border-radius: 9px; gap: 2px;
     }
-    .hb-dot{ animation: hb-dot 2s ease infinite; }
-
-    /* ─── Card entrance ─── */
-    @keyframes slide-up {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
+    .seg-btn {
+      font-size: 12.5px; font-weight: 500; padding: 6px 12px;
+      border-radius: 6px; color: var(--muted); background: transparent;
+      border: none; cursor: pointer; transition: all 0.14s ease;
+      font-family: 'Geist', sans-serif;
     }
-    .card-enter { animation: slide-up 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+    .seg-btn:hover { color: var(--ink-2); }
+    .seg-btn.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-xs), 0 0 0 1px var(--hair); }
 
-    /* ─── Print ─── */
-    @media print {
-      body { background: #fff !important; }
-      .no-print { display: none !important; }
-      .print-section { break-inside: avoid; }
-      .card, .card-elev { box-shadow: none !important; border: 1px solid #DDD; }
-    }
+    /* ── Stat card ── */
+    .stat-card { transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+    .stat-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
 
-    /* ─── Delta arrows ─── */
-    .delta-up   { color: var(--coral); }
-    .delta-down { color: var(--teal); }
-    .delta-eq   { color: var(--muted); }
+    /* ── Chart ── */
+    .chart-wrapper { position: relative; }
 
-    /* ─── Typing dots ─── */
-    @keyframes typing-dot {
-      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-      30%           { transform: translateY(-4px); opacity: 1; }
-    }
-    .typing-dot{
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--muted); display: inline-block;
-    }
-    .typing-dot:nth-child(1) { animation: typing-dot 1s ease infinite 0ms; }
-    .typing-dot:nth-child(2) { animation: typing-dot 1s ease infinite 150ms; }
-    .typing-dot:nth-child(3) { animation: typing-dot 1s ease infinite 300ms; }
+    /* ── Live dot ── */
+    @keyframes hb-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.9); } }
+    .hb-dot { animation: hb-dot 2s ease infinite; }
 
-    /* ─── Logo mark ─── */
-    .logo-mark{
-      width: 32px; height: 32px;
-      border-radius: 8px;
+    /* ── Card entrance ── */
+    @keyframes slide-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .card-enter { animation: slide-up 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+    /* ── Logo mark ── */
+    .logo-mark {
+      width: 32px; height: 32px; border-radius: 8px;
       background: linear-gradient(135deg, var(--logo-from) 0%, var(--logo-to) 100%);
-      display:flex; align-items:center; justify-content:center;
-      color: #fff;
-      box-shadow:
-        0 1px 0 rgba(255,255,255,0.06) inset,
-        0 1px 3px rgba(0,0,0,0.12);
-      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 1px 3px rgba(0,0,0,0.12);
+      position: relative; flex-shrink: 0;
     }
-    .logo-mark::after{
-      content:'';
-      position: absolute;
-      inset: 0;
-      border-radius: 8px;
+    .logo-mark::after {
+      content: ''; position: absolute; inset: 0; border-radius: 8px;
       background: radial-gradient(120% 100% at 0% 0%, var(--logo-glow) 0%, transparent 55%);
       pointer-events: none;
     }
 
-    /* ─── Section overline ─── */
-    .section-rule{ display: flex; align-items: center; gap: 10px; }
-    .section-rule::after{ content:''; flex: 1; height: 1px; background: linear-gradient(to right, var(--hair), transparent); }
+    /* ── Numbers ── */
+    .num-hero { font-weight: 600; font-size: 48px; line-height: 1.0; letter-spacing: -0.025em; }
+    .num-xl { font-weight: 600; font-size: 36px; line-height: 1.0; letter-spacing: -0.022em; }
+    .num-lg { font-weight: 600; font-size: 28px; line-height: 1.0; letter-spacing: -0.018em; }
+    .num-md { font-weight: 600; font-size: 20px; line-height: 1.0; letter-spacing: -0.012em; }
+    .inset-surface { background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; }
 
-    /* ─── Number display sizes (all Geist, no italic) ─── */
-    .num-hero   { font-weight: 600; font-size: 52px;  line-height: 1.0;  letter-spacing: -0.025em; }
-    .num-xl     { font-weight: 600; font-size: 38px;  line-height: 1.0;  letter-spacing: -0.022em; }
-    .num-lg     { font-weight: 600; font-size: 30px;  line-height: 1.0;  letter-spacing: -0.018em; }
-    .num-md     { font-weight: 600; font-size: 22px;  line-height: 1.0;  letter-spacing: -0.012em; }
+    /* ── Delta ── */
+    .delta-up { color: var(--coral); }
+    .delta-down { color: var(--teal); }
+    .delta-eq { color: var(--muted); }
 
-    /* ─── Soft inset surface for sub-metrics ─── */
-    .inset-surface{
-      background: var(--bg);
-      border: 1px solid var(--hair);
-      border-radius: 8px;
+    /* ── Typing dots ── */
+    @keyframes typing-dot {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-4px); opacity: 1; }
+    }
+    .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; }
+    .typing-dot:nth-child(1) { animation: typing-dot 1s ease infinite 0ms; }
+    .typing-dot:nth-child(2) { animation: typing-dot 1s ease infinite 150ms; }
+    .typing-dot:nth-child(3) { animation: typing-dot 1s ease infinite 300ms; }
+
+    /* ── Theme toggle ── */
+    .theme-toggle .sun-icon { display: none; }
+    .theme-toggle .moon-icon { display: block; }
+    html[data-theme="dark"] .theme-toggle .sun-icon { display: block; }
+    html[data-theme="dark"] .theme-toggle .moon-icon { display: none; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 8px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-h); }
+
+    /* ── Section rule ── */
+    .section-rule { display: flex; align-items: center; gap: 10px; }
+    .section-rule::after { content: ''; flex: 1; height: 1px; background: linear-gradient(to right, var(--hair), transparent); }
+
+    /* ── Mic ── */
+    @keyframes mic-ripple { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(2.4); opacity: 0; } }
+    .mic-ripple::before {
+      content: ''; position: absolute; inset: 0; border-radius: 50%;
+      background: oklch(0.58 0.20 28 / 0.4); animation: mic-ripple 1s ease-out infinite;
+    }
+    .mic-active { color: var(--crit) !important; position: relative; }
+
+    /* ── Analysis page ── */
+    .analysis-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .insight-card {
+      background: var(--card); border: 1px solid var(--hair); border-radius: 12px;
+      padding: 18px; transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .insight-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    .insight-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 12px;
     }
 
-    /* ─── Subtle background grid behind hero ─── */
-    .grid-overlay{
-      position: absolute;
-      inset: 0;
-      background-image:
-        linear-gradient(to right, var(--grain-color) 1px, transparent 1px),
-        linear-gradient(to bottom, var(--grain-color) 1px, transparent 1px);
-      background-size: 28px 28px;
-      mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 85%);
-      -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 85%);
-      pointer-events: none;
+    /* ── Print ── */
+    @media print {
+      .sidebar, .bottom-nav, .chat-fab, .chat-panel, .top-header, .no-print { display: none !important; }
+      .main-content { margin-left: 0 !important; }
+      body { background: #fff !important; }
+      .card, .card-elev { box-shadow: none !important; border: 1px solid #DDD; }
+      .page { display: block !important; }
+      .page:not(#page-history) { display: none !important; }
     }
 
-    /* ─── Trend indicators inside stat cards ─── */
-    .trend{
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 11.5px;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1023px) {
+      .sidebar { display: none; }
+      .main-content { margin-left: 0; }
+      .bottom-nav { display: flex; flex-direction: column; }
+      .page-content { padding: 16px 16px calc(80px + env(safe-area-inset-bottom, 0px)); }
+      .top-header { padding: 10px 16px; }
+      .chat-fab { bottom: calc(72px + env(safe-area-inset-bottom, 0px) + 12px); }
+      .chat-panel { bottom: calc(72px + env(safe-area-inset-bottom, 0px) + 64px); right: 16px; }
     }
-    .trend-up    { background: var(--coral-soft); color: var(--coral); }
-    .trend-down  { background: var(--teal-soft);  color: var(--teal); }
-    .trend-flat  { background: var(--bg-2);       color: var(--muted); }
 
-    /* AI avatar */
-    .ai-avatar{
-      width: 32px; height: 32px;
-      border-radius: 9px;
-      background: linear-gradient(135deg, oklch(0.55 0.10 195), oklch(0.42 0.10 200));
-      display: flex; align-items: center; justify-content: center;
-      color: #fff;
-      box-shadow: var(--shadow-xs);
-    }
-    /* ─── Theme toggle button ─── */
-    .theme-toggle{ position: relative; }
-    .theme-toggle .sun-icon{ display: none; }
-    .theme-toggle .moon-icon{ display: block; }
-    html[data-theme="dark"] .theme-toggle .sun-icon{ display: block; }
-    html[data-theme="dark"] .theme-toggle .moon-icon{ display: none; }
-
-    /* ══════════════════════════════════════════════════════════════
-       MOBILE RESPONSIVE — tanpa mengubah design desktop
-       ══════════════════════════════════════════════════════════════ */
-
-    /* ── Tablet & below (< 768px) ── */
     @media (max-width: 767px) {
-      /* Reduce main padding */
-      main.px-6 { padding-left: 16px !important; padding-right: 16px !important; }
-      header .px-6 { padding-left: 16px !important; padding-right: 16px !important; }
-      footer .px-6 { padding-left: 16px !important; padding-right: 16px !important; }
-      main.py-10 { padding-top: 24px !important; padding-bottom: 24px !important; }
-      main.space-y-10 > * + * { margin-top: 24px !important; }
-
-      /* Hero text */
-      h1 { font-size: 28px !important; }
-      .max-w-2xl p { font-size: 14px !important; }
-
-      /* Hero info cards stack */
-      section.flex-wrap > .flex.items-center.gap-3 {
-        flex-direction: column;
-        width: 100%;
-      }
-      section.flex-wrap > .flex.items-center.gap-3 .card-flat {
-        width: 100%;
-        min-width: unset !important;
-      }
-
-      /* Bento grid: 1 col on mobile for gauges + comparison */
-      .grid.grid-cols-2.lg\\:grid-cols-4 {
-        grid-template-columns: 1fr 1fr !important;
-      }
-
-      /* Gauge SVG scale down */
-      #gauge-temp, #gauge-hum {
-        width: 150px !important;
-        height: 110px !important;
-      }
-
-      /* Microclimate comparison card */
-      .col-span-2 { grid-column: span 2 !important; }
-      .num-hero { font-size: 36px !important; }
-      .num-xl  { font-size: 28px !important; }
-      .num-lg  { font-size: 24px !important; }
-      .num-md  { font-size: 18px !important; }
-
-      /* Stats grid: 2 cols on tablet */
-      section .grid.grid-cols-2.lg\\:grid-cols-4 {
-        grid-template-columns: 1fr 1fr !important;
-      }
-
-      /* Chart height */
-      .chart-wrapper { height: 220px !important; }
-
-      /* Chat area */
-      #chat-messages { height: 260px !important; }
-
-      /* Reduce card padding */
-      .p-6 { padding: 16px !important; }
-      .p-5 { padding: 14px !important; }
-
-      /* Segmented control scroll */
-      .seg { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .seg-btn { white-space: nowrap; padding: 5px 10px; font-size: 12px; }
+      .bento-grid { grid-template-columns: 1fr 1fr !important; }
+      .stats-grid { grid-template-columns: 1fr 1fr !important; }
+      .analysis-row { grid-template-columns: 1fr; }
+      .num-hero { font-size: 32px !important; }
+      .num-xl { font-size: 26px !important; }
+      .num-lg { font-size: 22px !important; }
+      .num-md { font-size: 18px !important; }
+      .chart-wrapper canvas { max-height: 220px; }
+      .compare-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+      .outdoor-sub-grid { grid-template-columns: 1fr 1fr 1fr !important; }
+      .hero-info { flex-direction: column; }
+      .hero-info .card-flat { width: 100%; }
     }
 
-    /* ── Small phones (< 480px) ── */
-    @media (max-width: 479px) {
-      /* Header compact */
-      header .py-3 { padding-top: 8px !important; padding-bottom: 8px !important; }
-      header .leading-tight div:last-child { display: none; } /* hide subtitle */
-
-      /* Hero even smaller */
-      h1 { font-size: 24px !important; }
-      .max-w-2xl p { font-size: 13px !important; }
-      section.flex-wrap > .max-w-2xl .badge { font-size: 10px; }
-
-      /* Bento: stack all to 1 col */
-      .grid.grid-cols-2.lg\\:grid-cols-4 {
-        grid-template-columns: 1fr !important;
-      }
-      .col-span-2 { grid-column: span 1 !important; }
-
-      /* Gauge even smaller */
-      #gauge-temp, #gauge-hum {
-        width: 130px !important;
-        height: 95px !important;
-      }
-
-      /* Numbers */
-      .num-hero { font-size: 30px !important; }
-      .num-xl  { font-size: 24px !important; }
-
-      /* Microclimate grid — stack vertical */
-      .grid.grid-cols-\\[1fr_auto_1fr\\] {
-        grid-template-columns: 1fr !important;
-        text-align: center !important;
-      }
-      .grid.grid-cols-\\[1fr_auto_1fr\\] .text-right {
-        text-align: center !important;
-      }
-      .grid.grid-cols-\\[1fr_auto_1fr\\] > div:nth-child(2) {
-        flex-direction: row !important;
-      }
-
-      /* Outdoor stats 1 col */
-      .grid.grid-cols-3 {
-        grid-template-columns: 1fr 1fr 1fr !important;
-      }
-
-      /* Chart */
-      .chart-wrapper { height: 180px !important; }
-
-      /* Chat input */
-      #chat-input { font-size: 14px; padding: 9px 12px; }
-      .btn-primary { padding: 8px 10px; font-size: 12px; }
-
-      /* Footer compact */
-      footer .py-6 { padding-top: 12px !important; padding-bottom: 12px !important; }
-      footer .flex-wrap { flex-direction: column; align-items: flex-start; gap: 8px !important; }
+    @media (max-width: 480px) {
+      .bento-grid { grid-template-columns: 1fr !important; }
+      .stats-grid { grid-template-columns: 1fr 1fr !important; }
+      .compare-col-delta { display: none; }
+      .chat-panel { width: calc(100vw - 24px); right: 12px; }
     }
   </style>
 </head>
 
-<body class="min-h-screen">
+<body>
+  <!-- ─────────────────────────────── APP SHELL ─────────────────────────────── -->
+  <div class="app-shell">
 
-  <!-- ── Header ─────────────────────────────────────────────── -->
-  <header class="sticky top-0 z-50 backdrop-blur-xl" style="background: var(--header-bg); border-bottom: 1px solid var(--hair);">
-    <div class="max-w-[1440px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
+    <!-- ══ SIDEBAR (Desktop) ══ -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
         <div class="logo-mark">
           <svg class="w-3.5 h-3.5 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
           </svg>
         </div>
-        <div class="leading-tight">
-          <div class="flex items-baseline gap-2">
-            <span style="font-size: 16px; font-weight: 600; letter-spacing: -0.015em;">ClimateOS</span>
-            <span class="text-muted-2" style="font-size: 13px; font-weight: 400;">/ Semarang</span>
-          </div>
-          <div class="label" style="font-size: 10px; letter-spacing: 0.08em; margin-top: 1px;">ROOM ENVIRONMENT MONITOR</div>
+        <div>
+          <div style="font-size: 15px; font-weight: 600; letter-spacing: -0.015em; color: var(--ink);">ClimateOS</div>
+          <div class="label" style="font-size: 9.5px; margin-top: 1px;">SEMARANG MONITOR</div>
         </div>
       </div>
 
-      <div class="flex items-center gap-2.5">
-        <div class="pill">
+      <nav class="sidebar-nav">
+        <div class="nav-label">Monitor</div>
+        <button class="nav-item active" data-page="dashboard">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-page="history">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          History
+        </button>
+        <button class="nav-item" data-page="analysis">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-1"/>
+          </svg>
+          Analysis
+        </button>
+
+        <div class="nav-label" style="margin-top: 8px;">System</div>
+        <button class="nav-item" id="sidebar-theme-btn">
+          <svg class="sun-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M5.6 18.4l1.1-1.1M17.3 6.7l1.1-1.1"/>
+          </svg>
+          <svg class="moon-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          Toggle Theme
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="pill" style="width: 100%; justify-content: center;">
           <span class="dot hb-dot"></span>
           <span>Live</span>
-          <span class="text-muted-2">·</span>
+          <span style="color: var(--muted-2);">·</span>
           <span id="last-updated" class="mono">—</span>
         </div>
-        <button id="btn-theme" class="theme-toggle no-print btn-icon" title="Toggle theme" aria-label="Toggle theme">
-          <svg class="sun-icon w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="4" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M5.6 18.4l1.1-1.1M17.3 6.7l1.1-1.1" />
-          </svg>
-          <svg class="moon-icon w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-          </svg>
-        </button>
-        <button id="btn-export-csv" class="no-print btn-ghost hidden sm:inline-flex">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-          Export CSV
-        </button>
-        <button id="btn-export-pdf" class="no-print btn-ghost hidden sm:inline-flex">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-          Report
-        </button>
       </div>
-    </div>
-  </header>
+    </aside>
 
-  <!-- ── Main Content ─────────────────────────────────────────── -->
-  <main class="max-w-[1440px] mx-auto px-6 py-10 space-y-10 relative">
-    <div class="grid-overlay" style="height: 320px;"></div>
+    <!-- ══ MAIN AREA ══ -->
+    <div class="main-content">
 
-    <!-- ══ HERO ═══════════════════════════════════════════════════ -->
-    <section class="relative flex items-start justify-between gap-6 flex-wrap">
-      <div class="max-w-2xl">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="badge" style="background: var(--emerald-soft); color: var(--emerald); border-color: var(--hair);">
-            <span class="dot" style="width: 5px; height: 5px; background: var(--emerald); box-shadow: none;"></span>
-            All systems operational
-          </span>
-          <span class="label" style="font-size: 10.5px;">Updated continuously</span>
-        </div>
-        <h1 style="font-size: 40px; font-weight: 600; line-height: 1.08; letter-spacing: -0.03em; color: var(--ink);">
-          Real-time room climate intelligence.
-        </h1>
-        <p class="text-muted mt-3" style="font-size: 15px; line-height: 1.55; max-width: 560px;">
-          Continuous indoor temperature and humidity monitoring, benchmarked against current outdoor conditions in Semarang. Powered by ESP32 telemetry and on-device AI analysis.
-        </p>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="card-flat px-4 py-3 flex items-center gap-3" style="min-width: 200px;">
-          <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--teal-soft); color: var(--teal);">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="flex items-center gap-2.5">
+          <!-- Mobile logo (hidden on desktop via sidebar) -->
+          <div class="logo-mark" style="width: 28px; height: 28px; border-radius: 7px;">
+            <svg style="width: 13px; height: 13px; position: relative; z-index: 1;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
           </div>
-          <div class="leading-tight">
-            <div class="label" style="font-size: 10.5px;">Sensors</div>
-            <div style="font-size: 15px; font-weight: 600; color: var(--ink);">2 / 2 nominal</div>
-          </div>
-        </div>
-        <div class="card-flat px-4 py-3 flex items-center gap-3" style="min-width: 200px;">
-          <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--amber-soft); color: var(--amber);">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          </div>
-          <div class="leading-tight">
-            <div class="label" style="font-size: 10.5px;">Uptime · 30d</div>
-            <div style="font-size: 15px; font-weight: 600; color: var(--ink);">99.94%</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ══ ROW 1: Bento Top Grid ═══════════════════════════════════════ -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-
-      <!-- Temperature Gauge -->
-      <div class="card-enter card-elev col-span-1 p-5" style="animation-delay:0ms">
-        <div class="flex items-center justify-between mb-2">
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full" style="background: var(--coral);"></span>
-            <span class="label-strong">Temperature</span>
-          </div>
-          <span id="badge-temp" class="badge tabular">—</span>
-        </div>
-        <div class="flex flex-col items-center my-1">
-          <svg id="gauge-temp" viewBox="0 0 140 100" width="190" height="140" class="overflow-visible">
-            <defs>
-              <linearGradient id="grad-temp" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%"   stop-color="oklch(0.78 0.10 35)"/>
-                <stop offset="100%" stop-color="oklch(0.60 0.18 25)"/>
-              </linearGradient>
-            </defs>
-            <path id="gauge-temp-track" class="gauge-track" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" />
-            <path id="gauge-temp-arc" class="gauge-arc" stroke="url(#grad-temp)" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;" />
-            <text id="gauge-temp-value" x="70" y="72" text-anchor="middle" dominant-baseline="middle" font-family="Geist" font-size="32" font-weight="600" letter-spacing="-0.5">—</text>
-            <text class="gauge-unit" x="70" y="92" text-anchor="middle" font-family="Geist" font-size="9" font-weight="500" letter-spacing="0.5">CELSIUS</text>
-          </svg>
-        </div>
-        <div class="w-full flex justify-between text-muted tabular" style="font-size: 10.5px; font-weight: 500;">
-          <span>0°</span><span>25°</span><span>50°</span>
-        </div>
-      </div>
-
-      <!-- Humidity Gauge -->
-      <div class="card-enter card-elev col-span-1 p-5" style="animation-delay:80ms">
-        <div class="flex items-center justify-between mb-2">
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full" style="background: var(--sky);"></span>
-            <span class="label-strong">Humidity</span>
-          </div>
-          <span id="badge-hum" class="badge tabular">—</span>
-        </div>
-        <div class="flex flex-col items-center my-1">
-          <svg id="gauge-hum" viewBox="0 0 140 100" width="190" height="140" class="overflow-visible">
-            <defs>
-              <linearGradient id="grad-hum" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%"   stop-color="oklch(0.78 0.06 220)"/>
-                <stop offset="100%" stop-color="oklch(0.55 0.13 235)"/>
-              </linearGradient>
-            </defs>
-            <path id="gauge-hum-track" class="gauge-track" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" />
-            <path id="gauge-hum-arc" class="gauge-arc" stroke="url(#grad-hum)" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;" />
-            <text id="gauge-hum-value" x="70" y="72" text-anchor="middle" dominant-baseline="middle" font-family="Geist" font-size="32" font-weight="600" letter-spacing="-0.5">—</text>
-            <text class="gauge-unit" x="70" y="92" text-anchor="middle" font-family="Geist" font-size="9" font-weight="500" letter-spacing="0.5">PERCENT RH</text>
-          </svg>
-        </div>
-        <div class="w-full flex justify-between text-muted tabular" style="font-size: 10.5px; font-weight: 500;">
-          <span>0%</span><span>50%</span><span>100%</span>
-        </div>
-      </div>
-
-      <!-- Microclimate Comparison Card -->
-      <div class="card-enter card-elev col-span-2 p-6 relative overflow-hidden" style="animation-delay:160ms">
-        <!-- Subtle gradient backdrop -->
-        <div style="position:absolute; inset:0; pointer-events:none; background: radial-gradient(60% 80% at 0% 0%, var(--coral-soft) 0%, transparent 55%), radial-gradient(60% 80% at 100% 100%, var(--sky-soft) 0%, transparent 55%); opacity: 0.6;"></div>
-
-        <div class="relative">
-          <div class="flex items-center justify-between mb-5">
-            <div class="flex items-center gap-2">
-              <span class="label-strong">Microclimate Comparison</span>
-              <span class="text-muted-2">·</span>
-              <span class="text-muted" style="font-size: 12.5px;">Indoor vs Outdoor</span>
-            </div>
-            <span class="pill">
-              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="3"/></svg>
-              Semarang · ID
-            </span>
-          </div>
-
-          <div class="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
-            <!-- Indoor -->
-            <div>
-              <p class="label mb-1.5">Indoor</p>
-              <p id="compare-indoor-temp" class="num-hero text-ink tabular">—</p>
-              <p id="compare-indoor-hum" class="text-muted tabular mt-2" style="font-size: 13px; font-weight: 500;">— % RH</p>
-            </div>
-
-            <!-- Delta -->
-            <div class="flex flex-col items-center gap-2 px-2">
-              <div id="delta-arrow" class="text-muted-2" style="font-size: 24px; line-height: 1;">→</div>
-              <div class="inset-surface px-3 py-2 text-center min-w-[88px]">
-                <p class="label" style="font-size: 10px;">Δ Temp</p>
-                <p id="delta-value" class="num-md text-ink tabular mt-0.5">—</p>
-              </div>
-            </div>
-
-            <!-- Outdoor -->
-            <div class="text-right">
-              <p class="label mb-1.5">Outdoor</p>
-              <p id="compare-outdoor-temp" class="num-hero text-ink tabular">—</p>
-              <p id="compare-outdoor-desc" class="text-muted tabular mt-2 truncate" style="font-size: 13px; font-weight: 500;">—</p>
-            </div>
-          </div>
-
-          <hr class="hr-soft mt-5 mb-4" />
-
-          <div class="grid grid-cols-3 gap-4">
-            <div>
-              <p class="label" style="font-size: 10px;">Feels Like</p>
-              <p class="mt-1"><span id="outdoor-feels" class="text-ink tabular" style="font-size: 18px; font-weight: 600; letter-spacing: -0.01em;">—</span></p>
-            </div>
-            <div>
-              <p class="label" style="font-size: 10px;">Wind</p>
-              <p class="mt-1"><span id="outdoor-wind" class="text-ink tabular" style="font-size: 18px; font-weight: 600; letter-spacing: -0.01em;">—</span> <span class="text-muted" style="font-size: 11.5px; font-weight: 500;">m/s</span></p>
-            </div>
-            <div>
-              <p class="label" style="font-size: 10px;">Humidity</p>
-              <p class="mt-1"><span id="outdoor-hum" class="text-ink tabular" style="font-size: 18px; font-weight: 600; letter-spacing: -0.01em;">—</span> <span class="text-muted" style="font-size: 11.5px; font-weight: 500;">%</span></p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ SECTION 02: Statistics ══════════════════════════════════════ -->
-    <section>
-      <div class="flex items-center justify-between mb-4">
-        <div class="section-rule" style="max-width: 360px;">
-          <span class="label-strong">Today's statistics</span>
-        </div>
-      </div>
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Min -->
-        <div class="stat-card card-enter card p-5 print-section" style="animation-delay:240ms">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: var(--sky-soft); color: var(--sky);">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-              <span class="label-strong">Minimum</span>
-            </div>
-          </div>
-          <p id="stat-min" class="num-xl text-ink tabular">—</p>
-          <hr class="hr-soft mt-4 mb-3" />
-          <p class="text-muted" style="font-size: 12px;">Today's lowest reading</p>
-        </div>
-
-        <!-- Max -->
-        <div class="stat-card card-enter card p-5 print-section" style="animation-delay:300ms">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: var(--coral-soft); color: var(--coral);">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" /></svg>
-              </div>
-              <span class="label-strong">Maximum</span>
-            </div>
-          </div>
-          <p id="stat-max" class="num-xl text-ink tabular">—</p>
-          <hr class="hr-soft mt-4 mb-3" />
-          <p class="text-muted" style="font-size: 12px;">Today's peak reading</p>
-        </div>
-
-        <!-- Avg -->
-        <div class="stat-card card-enter card p-5 print-section" style="animation-delay:360ms">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: var(--teal-soft); color: var(--teal);">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3-9 4 18 3-9h4"/></svg>
-              </div>
-              <span class="label-strong">Average</span>
-            </div>
-          </div>
-          <p id="stat-avg" class="num-xl text-ink tabular">—</p>
-          <hr class="hr-soft mt-4 mb-3" />
-          <p class="text-muted" style="font-size: 12px;">Today's mean temperature</p>
-        </div>
-
-        <!-- Count -->
-        <div class="stat-card card-enter card p-5 print-section" style="animation-delay:420ms">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: var(--emerald-soft); color: var(--emerald);">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
-              </div>
-              <span class="label-strong">Samples</span>
-            </div>
-          </div>
-          <p id="stat-count" class="num-xl text-ink tabular">—</p>
-          <hr class="hr-soft mt-4 mb-3" />
-          <p class="text-muted" style="font-size: 12px;">Data points logged today</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- ══ SECTION 03: Chart ═══════════════════════════════════════════════ -->
-    <section>
-      <div class="card-enter card p-6 print-section" style="animation-delay:480ms">
-        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
           <div>
-            <div class="flex items-center gap-2">
-              <span class="label-strong">Time-Series Analytics</span>
-            </div>
-            <h2 class="mt-1" style="font-size: 22px; font-weight: 600; letter-spacing: -0.018em; line-height: 1.2; color: var(--ink);">
-              Temperature and humidity trends
-            </h2>
-            <p class="text-muted mt-1" style="font-size: 13px;">Live measurements aggregated over the selected window.</p>
-          </div>
-          <!-- Segmented time range control -->
-          <div class="seg self-start sm:self-auto">
-            <button class="seg-btn active" data-range="live">Live</button>
-            <button class="seg-btn" data-range="1h">1h</button>
-            <button class="seg-btn" data-range="3h">3h</button>
-            <button class="seg-btn" data-range="12h">12h</button>
-            <button class="seg-btn" data-range="24h">24h</button>
+            <span id="page-title" style="font-size: 15px; font-weight: 600; letter-spacing: -0.012em; color: var(--ink);">Dashboard</span>
+            <span class="text-muted-2" style="font-size: 13px; font-weight: 400;"> / Semarang</span>
           </div>
         </div>
-        <div class="chart-wrapper">
-          <canvas id="climate-chart"></canvas>
-        </div>
-        <!-- Legend -->
-        <div class="flex gap-6 mt-5 justify-center flex-wrap">
-          <div class="flex items-center gap-2">
-            <span class="inline-block rounded-full" style="width: 9px; height: 9px; background: var(--coral); box-shadow: 0 0 0 3px var(--coral-soft);"></span>
-            <span style="font-size: 12.5px; font-weight: 500; color: var(--ink-2);">Temperature</span>
-            <span class="text-muted" style="font-size: 12px;">°C</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="inline-block rounded-full" style="width: 9px; height: 9px; background: var(--sky); box-shadow: 0 0 0 3px var(--sky-soft);"></span>
-            <span style="font-size: 12.5px; font-weight: 500; color: var(--ink-2);">Humidity</span>
-            <span class="text-muted" style="font-size: 12px;">%</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ══ SECTION 04: AI Chat ══════════════════════════════════════════════ -->
-    <section>
-      <div class="card-enter card overflow-hidden" style="animation-delay:560ms">
-        <div class="flex items-center gap-3 p-5" style="border-bottom: 1px solid var(--hair);">
-          <div class="ai-avatar">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-1" /></svg>
-          </div>
-          <div class="leading-tight">
-            <h2 style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink);">
-              Climate Analyst
-            </h2>
-            <p class="text-muted mono" style="font-size: 11.5px;">Gemini 2.5 Flash · live sensor context injected</p>
-          </div>
-          <div class="ml-auto pill">
+        <div class="flex items-center gap-2">
+          <div class="pill" style="display: none;" id="header-live-pill">
             <span class="dot hb-dot"></span>
-            <span>Online</span>
+            <span>Live</span>
           </div>
+          <button id="btn-theme" class="theme-toggle btn-icon no-print" title="Toggle theme" aria-label="Toggle theme">
+            <svg class="sun-icon" style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="4"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M5.6 18.4l1.1-1.1M17.3 6.7l1.1-1.1"/>
+            </svg>
+            <svg class="moon-icon" style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </button>
+          <button id="btn-export-csv" class="btn-ghost no-print" style="display:none;" id="export-csv-header">
+            <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            CSV
+          </button>
         </div>
+      </header>
 
-        <!-- Chat messages area -->
-        <div id="chat-messages" class="h-80 overflow-y-auto p-6 space-y-4 scroll-smooth" style="background: var(--bg);">
-          <!-- Welcome message -->
-          <div class="flex items-start gap-3 max-w-2xl">
-            <div class="ai-avatar flex-shrink-0" style="width: 28px; height: 28px; border-radius: 7px;">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+      <!-- Page Content -->
+      <main class="page-content">
+
+        <!-- ════════ PAGE: DASHBOARD ════════ -->
+        <div id="page-dashboard" class="page active">
+
+          <!-- Bento grid -->
+          <div class="bento-grid" style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 16px; margin-bottom: 16px;">
+
+            <!-- Temp Gauge -->
+            <div class="card-enter card-elev" style="padding: 18px; animation-delay: 0ms;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--coral); display: inline-block;"></span>
+                  <span class="label-strong">Temperature</span>
+                </div>
+                <span id="badge-temp" class="badge tabular">—</span>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: center;">
+                <svg id="gauge-temp" viewBox="0 0 140 100" style="width: 100%; max-width: 200px; height: auto;" class="overflow-visible">
+                  <defs>
+                    <linearGradient id="grad-temp" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stop-color="oklch(0.78 0.10 35)"/>
+                      <stop offset="100%" stop-color="oklch(0.60 0.18 25)"/>
+                    </linearGradient>
+                  </defs>
+                  <path class="gauge-track" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85"/>
+                  <path id="gauge-temp-arc" class="gauge-arc" stroke="url(#grad-temp)" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;"/>
+                  <text id="gauge-temp-value" x="70" y="70" text-anchor="middle" dominant-baseline="middle" font-family="Geist" font-size="30" font-weight="600" letter-spacing="-0.5">—</text>
+                  <text class="gauge-unit" x="70" y="90" text-anchor="middle" font-family="Geist" font-size="9" font-weight="500" letter-spacing="0.5">CELSIUS</text>
+                </svg>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 500; color: var(--muted);">
+                <span>0°</span><span>25°</span><span>50°</span>
+              </div>
             </div>
-            <div class="chat-ai p-4">
-              <p style="font-size: 14px; line-height: 1.6; color: var(--ink-2);">
-                Good day. I have continuous access to your <strong style="color: var(--ink); font-weight: 600;">live sensor stream</strong>, historical trends, and current Semarang outdoor conditions. Ask me about anomalies, thermal comfort, ventilation, or any deviation from clinical comfort thresholds.
-              </p>
+
+            <!-- Humidity Gauge -->
+            <div class="card-enter card-elev" style="padding: 18px; animation-delay: 80ms;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--sky); display: inline-block;"></span>
+                  <span class="label-strong">Humidity</span>
+                </div>
+                <span id="badge-hum" class="badge tabular">—</span>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: center;">
+                <svg id="gauge-hum" viewBox="0 0 140 100" style="width: 100%; max-width: 200px; height: auto;" class="overflow-visible">
+                  <defs>
+                    <linearGradient id="grad-hum" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stop-color="oklch(0.78 0.06 220)"/>
+                      <stop offset="100%" stop-color="oklch(0.55 0.13 235)"/>
+                    </linearGradient>
+                  </defs>
+                  <path class="gauge-track" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85"/>
+                  <path id="gauge-hum-arc" class="gauge-arc" stroke="url(#grad-hum)" stroke-width="10" d="M 20 85 A 50 50 0 1 1 120 85" style="stroke-dasharray:188; stroke-dashoffset:188;"/>
+                  <text id="gauge-hum-value" x="70" y="70" text-anchor="middle" dominant-baseline="middle" font-family="Geist" font-size="30" font-weight="600" letter-spacing="-0.5">—</text>
+                  <text class="gauge-unit" x="70" y="90" text-anchor="middle" font-family="Geist" font-size="9" font-weight="500" letter-spacing="0.5">PERCENT RH</text>
+                </svg>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 500; color: var(--muted);">
+                <span>0%</span><span>50%</span><span>100%</span>
+              </div>
+            </div>
+
+            <!-- Compare Card -->
+            <div class="card-enter card-elev" style="padding: 20px; animation-delay: 160ms; position: relative; overflow: hidden;">
+              <div style="position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 80% at 0% 0%, var(--coral-soft) 0%, transparent 55%), radial-gradient(60% 80% at 100% 100%, var(--sky-soft) 0%, transparent 55%); opacity: 0.6;"></div>
+              <div style="position: relative;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                  <span class="label-strong">Microclimate Comparison</span>
+                  <span class="pill" style="font-size: 11px;">
+                    <svg style="width:11px;height:11px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="3"/></svg>
+                    Semarang
+                  </span>
+                </div>
+
+                <div class="compare-grid" style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;">
+                  <div>
+                    <p class="label" style="margin-bottom: 4px;">Indoor</p>
+                    <p id="compare-indoor-temp" class="num-hero text-ink tabular">—</p>
+                    <p id="compare-indoor-hum" style="font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 6px;">— %</p>
+                  </div>
+                  <div class="compare-col-delta" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 4px;">
+                    <div id="delta-arrow" style="font-size: 22px; color: var(--muted-2);">→</div>
+                    <div class="inset-surface" style="padding: 8px 12px; text-align: center; min-width: 80px;">
+                      <p class="label" style="font-size: 9.5px;">Δ Temp</p>
+                      <p id="delta-value" class="num-md text-ink tabular" style="margin-top: 2px;">—</p>
+                    </div>
+                  </div>
+                  <div style="text-align: right;">
+                    <p class="label" style="margin-bottom: 4px;">Outdoor</p>
+                    <p id="compare-outdoor-temp" class="num-hero text-ink tabular">—</p>
+                    <p id="compare-outdoor-desc" style="font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">—</p>
+                  </div>
+                </div>
+
+                <hr class="hr-soft" style="margin: 14px 0 12px;">
+
+                <div class="outdoor-sub-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                  <div>
+                    <p class="label" style="font-size: 9.5px;">Feels Like</p>
+                    <p style="margin-top: 4px;"><span id="outdoor-feels" class="text-ink tabular" style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em;">—</span></p>
+                  </div>
+                  <div>
+                    <p class="label" style="font-size: 9.5px;">Wind</p>
+                    <p style="margin-top: 4px;"><span id="outdoor-wind" class="text-ink tabular" style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em;">—</span> <span class="text-muted" style="font-size: 11px;">m/s</span></p>
+                  </div>
+                  <div>
+                    <p class="label" style="font-size: 9.5px;">Humidity</p>
+                    <p style="margin-top: 4px;"><span id="outdoor-hum" class="text-ink tabular" style="font-size: 17px; font-weight: 600; letter-spacing: -0.01em;">—</span> <span class="text-muted" style="font-size: 11px;">%</span></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stats Row -->
+          <div class="stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+            <div class="stat-card card-enter card" style="padding: 16px; animation-delay: 240ms;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <div style="width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: var(--sky-soft); color: var(--sky);">
+                  <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                </div>
+                <span class="label-strong">Minimum</span>
+              </div>
+              <p id="stat-min" class="num-xl text-ink tabular">—</p>
+              <hr class="hr-soft" style="margin: 12px 0 8px;">
+              <p class="text-muted" style="font-size: 11.5px;">Today's lowest</p>
+            </div>
+
+            <div class="stat-card card-enter card" style="padding: 16px; animation-delay: 300ms;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <div style="width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: var(--coral-soft); color: var(--coral);">
+                  <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>
+                </div>
+                <span class="label-strong">Maximum</span>
+              </div>
+              <p id="stat-max" class="num-xl text-ink tabular">—</p>
+              <hr class="hr-soft" style="margin: 12px 0 8px;">
+              <p class="text-muted" style="font-size: 11.5px;">Today's peak</p>
+            </div>
+
+            <div class="stat-card card-enter card" style="padding: 16px; animation-delay: 360ms;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <div style="width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: var(--teal-soft); color: var(--teal);">
+                  <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+                </div>
+                <span class="label-strong">Average</span>
+              </div>
+              <p id="stat-avg" class="num-xl text-ink tabular">—</p>
+              <hr class="hr-soft" style="margin: 12px 0 8px;">
+              <p class="text-muted" style="font-size: 11.5px;">Today's mean</p>
+            </div>
+
+            <div class="stat-card card-enter card" style="padding: 16px; animation-delay: 420ms;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <div style="width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: var(--emerald-soft); color: var(--emerald);">
+                  <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+                </div>
+                <span class="label-strong">Samples</span>
+              </div>
+              <p id="stat-count" class="num-xl text-ink tabular">—</p>
+              <hr class="hr-soft" style="margin: 12px 0 8px;">
+              <p class="text-muted" style="font-size: 11.5px;">Data points today</p>
+            </div>
+          </div>
+
+          <!-- Live Chart -->
+          <div class="card-enter card" style="padding: 20px; animation-delay: 480ms;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <span class="label-strong">Real-time Trend</span>
+                <h2 style="font-size: 20px; font-weight: 600; letter-spacing: -0.018em; color: var(--ink); margin: 2px 0 0;">Temperature & humidity over time</h2>
+              </div>
+              <div class="seg">
+                <button class="seg-btn active" data-range="live">Live</button>
+                <button class="seg-btn" data-range="1h">1h</button>
+                <button class="seg-btn" data-range="3h">3h</button>
+                <button class="seg-btn" data-range="12h">12h</button>
+                <button class="seg-btn" data-range="24h">24h</button>
+              </div>
+            </div>
+            <div class="chart-wrapper" style="height: 260px;">
+              <canvas id="climate-chart"></canvas>
+            </div>
+            <div style="display: flex; gap: 20px; margin-top: 14px; justify-content: center; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="width: 9px; height: 9px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 3px var(--coral-soft); display: inline-block;"></span>
+                <span style="font-size: 12.5px; font-weight: 500; color: var(--ink-2);">Temperature</span>
+                <span class="text-muted" style="font-size: 12px;">°C</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="width: 9px; height: 9px; border-radius: 50%; background: var(--sky); box-shadow: 0 0 0 3px var(--sky-soft); display: inline-block;"></span>
+                <span style="font-size: 12.5px; font-weight: 500; color: var(--ink-2);">Humidity</span>
+                <span class="text-muted" style="font-size: 12px;">%</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Chat input -->
-        <div class="p-5" style="border-top: 1px solid var(--hair); background: var(--card);">
-          <div class="flex gap-2 items-center">
-            <input
-              id="chat-input"
-              type="text"
-              placeholder="Ask about thermal comfort, anomalies, or trends…"
-              class="input flex-1 min-w-0"
-              autocomplete="off"
-            />
-            <button id="btn-mic" title="Speech to Text" class="btn-icon">
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-              </svg>
-            </button>
-            <button id="btn-send" class="btn-primary">
-              <span>Send</span>
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
+        <!-- ════════ PAGE: HISTORY ════════ -->
+        <div id="page-history" class="page">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h1 style="font-size: 24px; font-weight: 600; letter-spacing: -0.022em; color: var(--ink); margin: 0;">Historical Data</h1>
+              <p class="text-muted" style="font-size: 13px; margin-top: 4px;">Sensor readings from your selected time window</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <div class="seg" id="history-seg">
+                <button class="seg-btn active" data-range="3h">3h</button>
+                <button class="seg-btn" data-range="6h">6h</button>
+                <button class="seg-btn" data-range="12h">12h</button>
+                <button class="seg-btn" data-range="24h">24h</button>
+              </div>
+              <button id="btn-history-pdf" class="btn-primary no-print">
+                <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Download PDF
+              </button>
+              <button id="btn-export-csv-history" class="btn-ghost no-print">
+                <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                CSV
+              </button>
+            </div>
           </div>
-          <p class="text-muted-2 mt-2.5" style="font-size: 11.5px;">
-            Press Enter to send · Microphone enabled for voice queries
-          </p>
-        </div>
-      </div>
-    </section>
 
-  </main>
+          <!-- Summary row for history -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;" id="history-summary-row">
+            <div class="card" style="padding: 14px 16px;">
+              <p class="label" style="margin-bottom: 6px;">Range</p>
+              <p id="hist-range-label" class="num-lg text-ink tabular">3h</p>
+            </div>
+            <div class="card" style="padding: 14px 16px;">
+              <p class="label" style="margin-bottom: 6px;">Records</p>
+              <p id="hist-count" class="num-lg text-ink tabular">—</p>
+            </div>
+            <div class="card" style="padding: 14px 16px;">
+              <p class="label" style="margin-bottom: 6px;">Temp Span</p>
+              <p id="hist-span" class="num-lg text-ink tabular">—</p>
+            </div>
+          </div>
 
-  <!-- ── Footer ──────────────────────────────────────────────────── -->
-  <footer class="max-w-[1440px] mx-auto px-6 mt-6">
-    <div class="divider"></div>
-    <div class="py-6 flex items-center justify-between flex-wrap gap-3">
-      <div class="flex items-center gap-2.5">
-        <div class="logo-mark" style="width: 22px; height: 22px; border-radius: 6px;">
-          <svg class="w-2.5 h-2.5 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          <!-- History chart -->
+          <div class="card" style="padding: 20px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <span class="label-strong">Historical Chart</span>
+              <div style="display: flex; gap: 16px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="width: 9px; height: 9px; border-radius: 50%; background: var(--coral); display: inline-block;"></span>
+                  <span style="font-size: 12px; color: var(--ink-2);">Temp °C</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="width: 9px; height: 9px; border-radius: 50%; background: var(--sky); display: inline-block;"></span>
+                  <span style="font-size: 12px; color: var(--ink-2);">Humidity %</span>
+                </div>
+              </div>
+            </div>
+            <div class="chart-wrapper" style="height: 240px;">
+              <canvas id="history-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Data table -->
+          <div class="card" style="overflow: hidden;">
+            <div style="padding: 14px 18px; border-bottom: 1px solid var(--hair); display: flex; align-items: center; justify-content: space-between;">
+              <span class="label-strong">Sensor Readings</span>
+              <span id="hist-table-count" class="badge">0 records</span>
+            </div>
+            <div style="overflow-x: auto;">
+              <table id="history-table" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                  <tr style="background: var(--bg-2);">
+                    <th style="padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; border-bottom: 1px solid var(--hair);">Timestamp</th>
+                    <th style="padding: 10px 16px; text-align: right; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Temp (°C)</th>
+                    <th style="padding: 10px 16px; text-align: right; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Humidity (%)</th>
+                    <th style="padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="history-tbody">
+                  <tr>
+                    <td colspan="4" style="padding: 40px; text-align: center; color: var(--muted-2); font-size: 13px;">Loading data…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-        <span class="text-muted" style="font-size: 12px; font-weight: 500;">ClimateOS · ESP32 + Firebase + Gemini</span>
-      </div>
-      <span class="text-muted-2 mono" style="font-size: 11px;">Engineered in Semarang · 2026</span>
-      <span id="footer-time" class="pill mono">—</span>
+
+        <!-- ════════ PAGE: ANALYSIS ════════ -->
+        <div id="page-analysis" class="page">
+          <div style="margin-bottom: 20px;">
+            <h1 style="font-size: 24px; font-weight: 600; letter-spacing: -0.022em; color: var(--ink); margin: 0;">Climate Analysis</h1>
+            <p class="text-muted" style="font-size: 13px; margin-top: 4px;">Indoor sensor vs. Semarang outdoor weather conditions</p>
+          </div>
+
+          <!-- Analysis comparison cards -->
+          <div class="analysis-row">
+            <div class="insight-card">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+                <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--coral-soft); color: var(--coral); display: flex; align-items: center; justify-content: center;">
+                  <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                </div>
+                <span class="label-strong">Indoor Temperature</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 12px;">
+                  <p class="label" style="font-size: 10px;">Current</p>
+                  <p id="an-indoor-temp" class="num-lg text-ink tabular" style="margin-top: 4px;">—</p>
+                </div>
+                <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 12px;">
+                  <p class="label" style="font-size: 10px;">Today avg</p>
+                  <p id="an-avg-temp" class="num-lg text-ink tabular" style="margin-top: 4px;">—</p>
+                </div>
+                <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 12px;">
+                  <p class="label" style="font-size: 10px;">Min</p>
+                  <p id="an-min-temp" class="num-lg text-ink tabular" style="margin-top: 4px;">—</p>
+                </div>
+                <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 12px;">
+                  <p class="label" style="font-size: 10px;">Max</p>
+                  <p id="an-max-temp" class="num-lg text-ink tabular" style="margin-top: 4px;">—</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="insight-card">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+                <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--sky-soft); color: var(--sky); display: flex; align-items: center; justify-content: center;">
+                  <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+                </div>
+                <span class="label-strong">Outdoor Weather</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 12px;">
+                  <p class="label" style="font-size: 10px;">Temperature</p>
+                  <p id="an-out-temp" class="num-lg text-ink tabular" style="margin-top: 4px;">—</p>
+                </div>
+                <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 12px;">
+                  <p class="label" style="font-size: 10px;">Feels Like</p>
+                  <p id="an-feels" class="num-lg text-ink tabular" style="margin-top: 4px;">—</p>
+                </div>
+                <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 12px;">
+                  <p class="label" style="font-size: 10px;">Humidity</p>
+                  <p id="an-out-hum" class="num-lg text-ink tabular" style="margin-top: 4px;">—</p>
+                </div>
+                <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 8px; padding: 12px;">
+                  <p class="label" style="font-size: 10px;">Wind</p>
+                  <p id="an-wind" class="num-lg text-ink tabular" style="margin-top: 4px;">—</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Delta / comparison chart -->
+          <div class="card" style="padding: 20px; margin-bottom: 16px;">
+            <div style="margin-bottom: 14px;">
+              <span class="label-strong">Temperature Delta (Indoor − Outdoor)</span>
+              <p class="text-muted" style="font-size: 12.5px; margin-top: 4px;">How much warmer or cooler your room is compared to outside.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
+              <div style="flex: 1; min-width: 120px; background: var(--bg-2); border: 1px solid var(--hair); border-radius: 10px; padding: 14px 16px; text-align: center;">
+                <p class="label" style="font-size: 10px;">Indoor temp</p>
+                <p id="an-delta-indoor" class="num-xl text-ink tabular" style="margin-top: 4px;">—</p>
+              </div>
+              <div style="font-size: 22px; color: var(--muted-2);">−</div>
+              <div style="flex: 1; min-width: 120px; background: var(--bg-2); border: 1px solid var(--hair); border-radius: 10px; padding: 14px 16px; text-align: center;">
+                <p class="label" style="font-size: 10px;">Outdoor temp</p>
+                <p id="an-delta-outdoor" class="num-xl text-ink tabular" style="margin-top: 4px;">—</p>
+              </div>
+              <div style="font-size: 22px; color: var(--muted-2);">=</div>
+              <div id="an-delta-result-card" style="flex: 1; min-width: 120px; background: var(--coral-soft); border: 1px solid var(--hair); border-radius: 10px; padding: 14px 16px; text-align: center;">
+                <p class="label" style="font-size: 10px; color: var(--coral);">ΔT</p>
+                <p id="an-delta-result" class="num-xl tabular" style="margin-top: 4px; color: var(--coral);">—</p>
+              </div>
+            </div>
+
+            <div class="chart-wrapper" style="height: 200px;">
+              <canvas id="analysis-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Comfort assessment -->
+          <div class="card" style="padding: 20px;">
+            <div style="margin-bottom: 14px;">
+              <span class="label-strong">Comfort Assessment</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;" id="comfort-grid">
+              <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 14px;">
+                <p class="label" style="font-size: 10px;">Thermal Comfort</p>
+                <p id="comfort-thermal" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px;">—</p>
+                <p id="comfort-thermal-note" class="text-muted" style="font-size: 11.5px; margin-top: 4px;">—</p>
+              </div>
+              <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 14px;">
+                <p class="label" style="font-size: 10px;">Humidity Level</p>
+                <p id="comfort-hum" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px;">—</p>
+                <p id="comfort-hum-note" class="text-muted" style="font-size: 11.5px; margin-top: 4px;">—</p>
+              </div>
+              <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 14px;">
+                <p class="label" style="font-size: 10px;">vs. Outdoor</p>
+                <p id="comfort-delta" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px;">—</p>
+                <p id="comfort-delta-note" class="text-muted" style="font-size: 11.5px; margin-top: 4px;">—</p>
+              </div>
+              <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 14px;">
+                <p class="label" style="font-size: 10px;">Overall</p>
+                <p id="comfort-overall" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px;">—</p>
+                <p id="comfort-overall-note" class="text-muted" style="font-size: 11.5px; margin-top: 4px;">—</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+
+      <!-- Footer -->
+      <footer style="position: relative; z-index: 1; padding: 0 24px 16px;">
+        <div class="divider"></div>
+        <div style="padding: 14px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <span class="text-muted" style="font-size: 12px; font-weight: 500;">ClimateOS · ESP32 + Firebase + Gemini</span>
+          <span class="text-muted-2 mono" style="font-size: 11px;">Semarang · 2026</span>
+          <span id="footer-time" class="pill mono" style="font-size: 11px;">—</span>
+        </div>
+      </footer>
     </div>
-  </footer>
+  </div>
+
+  <!-- ══ BOTTOM NAV (Mobile) ══ -->
+  <nav class="bottom-nav">
+    <div class="bottom-nav-items">
+      <button class="bnav-item active" data-page="dashboard">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="bnav-item" data-page="history">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        <span>History</span>
+      </button>
+      <button class="bnav-item" data-page="analysis">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-1"/>
+        </svg>
+        <span>Analysis</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ══ FLOATING AI CHAT ══ -->
+  <button class="chat-fab" id="chat-fab-btn" title="Ask Climate Analyst" aria-label="Open AI chat">
+    <svg style="width:22px;height:22px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+    </svg>
+    <div class="chat-fab-badge" id="chat-fab-badge"></div>
+  </button>
+
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-panel-header">
+      <div class="ai-avatar">
+        <svg style="width:15px;height:15px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <h2 style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); margin: 0;">Climate Analyst</h2>
+        <p class="mono" style="font-size: 10.5px; color: var(--muted); margin: 0;">Gemini 2.5 Flash · live context</p>
+      </div>
+      <div class="pill" style="font-size: 10.5px; gap: 4px; padding: 3px 8px;">
+        <span class="dot hb-dot" style="width: 5px; height: 5px;"></span>
+        <span>Online</span>
+      </div>
+      <button id="chat-close-btn" class="btn-icon" style="width: 30px; height: 30px; margin-left: 4px;" aria-label="Close chat">
+        <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div id="chat-messages">
+      <div class="chat-ai">
+        <p style="color: var(--ink-2);">Good day. I have access to your <strong style="color: var(--ink);">live sensor stream</strong> and Semarang outdoor conditions. Ask me about anomalies, thermal comfort, or ventilation.</p>
+      </div>
+    </div>
+
+    <div class="chat-panel-input">
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <input id="chat-input" type="text" placeholder="Ask about your climate data…" class="input" autocomplete="off" style="padding: 9px 12px; font-size: 13px;"/>
+        <button id="btn-mic" class="btn-icon" title="Voice input" aria-label="Voice input">
+          <svg style="width:15px;height:15px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+        </button>
+        <button id="btn-send" class="btn-primary" style="padding: 8px 12px; white-space: nowrap;">
+          <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
   <script>
-    /* ─── Theme toggle ─── */
-    (function(){
-      var btn = document.getElementById('btn-theme');
-      if(!btn) return;
-      btn.addEventListener('click', function(){
+    /* ── Theme toggle (inline for zero-flash) ── */
+    function applyThemeToggle(btn) {
+      if (!btn) return;
+      btn.addEventListener('click', function() {
         var current = document.documentElement.getAttribute('data-theme') || 'light';
         var next = current === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
-        try{ localStorage.setItem('climateos-theme', next); }catch(e){}
+        try { localStorage.setItem('climateos-theme', next); } catch(e) {}
       });
-    })();
+    }
+    applyThemeToggle(document.getElementById('btn-theme'));
+    applyThemeToggle(document.getElementById('sidebar-theme-btn'));
   </script>
 </body>
 </html>
