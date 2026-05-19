@@ -637,87 +637,103 @@ th:nth-child(2),th:nth-child(3){text-align:right}td{padding:7px 14px;border-bott
 
 // ── EVENT LISTENERS ───────────────────────────────────────────────────────────
 function attachListeners() {
+  document.body.addEventListener('click', e => {
+    // 1. Navigation
+    const navBtn = e.target.closest('.nav-item[data-page], .bnav-item[data-page]');
+    if (navBtn) {
+      navigateTo(navBtn.dataset.page);
+      return;
+    }
 
-  // Navigasi — gunakan selector spesifik agar tidak bentrok
-  $$('.nav-item[data-page], .bnav-item[data-page]').forEach(btn => {
-    btn.addEventListener('click', () => navigateTo(btn.dataset.page));
-  });
+    // 2. Chat Fab
+    const fabBtn = e.target.closest('#chat-fab-btn');
+    if (fabBtn) {
+      toggleChat();
+      return;
+    }
 
-  // Chat fab
-  const fab = $('chat-fab-btn');
-  if (fab) fab.addEventListener('click', toggleChat);
+    // 3. Chat Close
+    const closeBtn = e.target.closest('#chat-close-btn');
+    if (closeBtn) {
+      toggleChat();
+      return;
+    }
 
-  const closeBtn = $('chat-close-btn');
-  if (closeBtn) closeBtn.addEventListener('click', toggleChat);
+    // 4. Send Chat
+    const sendBtn = e.target.closest('#btn-send');
+    if (sendBtn) {
+      sendChat();
+      return;
+    }
 
-  // Chat kirim
-  const sendBtn = $('btn-send');
-  if (sendBtn) sendBtn.addEventListener('click', sendChat);
+    // 5. Mic
+    const micBtn = e.target.closest('#btn-mic');
+    if (micBtn) {
+      if (State.recognition) {
+        State.isMicActive ? State.recognition.stop() : State.recognition.start();
+      }
+      return;
+    }
 
-  const chatInput = $('chat-input');
-  if (chatInput) chatInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
-  });
-
-  // Mic
-  const mic = $('btn-mic');
-  if (mic) mic.addEventListener('click', () => {
-    if (!State.recognition) return;
-    State.isMicActive ? State.recognition.stop() : State.recognition.start();
-  });
-
-  // Dashboard range selector
-  $$('#page-dashboard .seg-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    // 6. Dashboard Range Selector
+    const dashSeg = e.target.closest('#page-dashboard .seg-btn');
+    if (dashSeg) {
       $$('#page-dashboard .seg-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      State.dashRange = btn.dataset.range;
+      dashSeg.classList.add('active');
+      State.dashRange = dashSeg.dataset.range;
       fetchDashChart();
-    });
-  });
+      return;
+    }
 
-  // History range selector
-  $$('#history-seg .seg-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    // 7. History Range Selector
+    const histSeg = e.target.closest('#history-seg .seg-btn');
+    if (histSeg) {
       $$('#history-seg .seg-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      fetchAndRenderHistory(btn.dataset.range);
+      histSeg.classList.add('active');
+      fetchAndRenderHistory(histSeg.dataset.range);
+      return;
+    }
+
+    // 8. CSV Dashboard
+    const csvDash = e.target.closest('#btn-export-csv');
+    if (csvDash) {
+      downloadCSV(
+        State.chartData.labels, State.chartData.temps, State.chartData.hums,
+        'climateos-dashboard-' + new Date().toISOString().slice(0,10) + '.csv'
+      );
+      return;
+    }
+
+    // 9. CSV History
+    const csvHist = e.target.closest('#btn-export-csv-history');
+    if (csvHist) {
+      downloadCSV(
+        State.historyData.map(r => r.timestamp),
+        State.historyData.map(r => r.temperature),
+        State.historyData.map(r => r.humidity),
+        'climateos-history-' + State.histRange + '-' + new Date().toISOString().slice(0,10) + '.csv'
+      );
+      return;
+    }
+
+    // 10. PDF History
+    const pdfBtn = e.target.closest('#btn-history-pdf');
+    if (pdfBtn) {
+      exportPDF();
+      return;
+    }
+  });
+
+  // Keep keydown listener attached directly to input
+  const chatInput = $('chat-input');
+  if (chatInput) {
+    chatInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { 
+        e.preventDefault(); 
+        sendChat(); 
+      }
     });
-  });
-
-  // Theme toggle — kedua tombol (header + sidebar)
-  [$('btn-theme'), $('sidebar-theme-btn')].forEach(btn => {
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      try { localStorage.setItem('climateos-theme', next); } catch(e) {}
-    });
-  });
-
-  // CSV dashboard
-  const csvDash = $('btn-export-csv');
-  if (csvDash) csvDash.addEventListener('click', () => {
-    downloadCSV(
-      State.chartData.labels, State.chartData.temps, State.chartData.hums,
-      'climateos-dashboard-' + new Date().toISOString().slice(0,10) + '.csv'
-    );
-  });
-
-  // CSV history
-  const csvHist = $('btn-export-csv-history');
-  if (csvHist) csvHist.addEventListener('click', () => {
-    downloadCSV(
-      State.historyData.map(r => r.timestamp),
-      State.historyData.map(r => r.temperature),
-      State.historyData.map(r => r.humidity),
-      'climateos-history-' + State.histRange + '-' + new Date().toISOString().slice(0,10) + '.csv'
-    );
-  });
-
-  // PDF history
-  const pdfBtn = $('btn-history-pdf');
-  if (pdfBtn) pdfBtn.addEventListener('click', exportPDF);
+  }
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
