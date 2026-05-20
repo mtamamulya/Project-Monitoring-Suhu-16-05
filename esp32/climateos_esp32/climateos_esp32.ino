@@ -83,7 +83,7 @@ byte iconDegree[8] = {
 #define API_ENDPOINT     "https://climateos-backend.onrender.com/api/telemetry"
 
 // ID unik untuk perangkat ini (bebas diisi apa saja)
-#define DEVICE_ID        "esp32-kamar-01"
+#define DEVICE_ID        "NICU-01"
 
 // Pin dan tipe sensor
 #define DHT_PIN          4
@@ -263,7 +263,7 @@ void updateNilaiLCD(float suhu, float kelembaban, float heatIndex) {
   }
 
   // Baris 2: Heat Index
-  lcd.setCursor(14, 2);
+  lcd.setCursor(13, 2);
   if (isnan(heatIndex)) {
     lcd.print("ERROR ");
   } else {
@@ -347,11 +347,11 @@ void loop() {
       updateNilaiLCD(temperature, humidity, heatIndex);
 
       // Baris 4: Status WiFi
-      lcd.setCursor(0, 3);
+      lcd.setCursor(2, 3);
       if (WiFi.status() == WL_CONNECTED) {
-        lcd.print("WiFi: OK            ");
+        lcd.print("WiFi: OK-          ");
       } else {
-        lcd.print("WiFi: Disconnected  ");
+        lcd.print("WiFi: Disconnected-");
       }
 
       bool success = sendTelemetry(temperature, humidity);
