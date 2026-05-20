@@ -34,9 +34,45 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
-// ── Konfigurasi LCD I2C ──────────────────────────────
-// Alamat I2C umumnya 0x27 atau 0x3F. Ukuran LCD: 16 kolom x 2 baris
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+// ── Konfigurasi LCD I2C 20x4 ──────────────────
+#define LCD_ADDR  0x27
+#define LCD_COLS  20
+#define LCD_ROWS  4
+LiquidCrystal_I2C lcd(LCD_ADDR, LCD_COLS, LCD_ROWS);
+
+// ── Custom Character (Ikon Termometer & Tetes) ─
+byte iconThermo[8] = {
+  0b00100,
+  0b01010,
+  0b01010,
+  0b01110,
+  0b01110,
+  0b11111,
+  0b11111,
+  0b01110
+};
+
+byte iconDrop[8] = {
+  0b00100,
+  0b00100,
+  0b01010,
+  0b01010,
+  0b10001,
+  0b10001,
+  0b10001,
+  0b01110
+};
+
+byte iconDegree[8] = {
+  0b01100,
+  0b10010,
+  0b10010,
+  0b01100,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000
+};
 
 
 // ── KONFIGURASI — UBAH BAGIAN INI ────────────────────────────
@@ -179,6 +215,64 @@ bool sendTelemetry(float temperature, float humidity) {
   }
 }
 
+// ─── Fungsi Tampilkan Header LCD ────────────────
+void tampilkanHeader() {
+  lcd.clear();
+  lcd.setCursor(3, 0);
+  lcd.print("=== MONITOR ===");
+  lcd.setCursor(2, 1);
+  lcd.print("Suhu & Kelembaban");
+  delay(2000);
+  lcd.clear();
+
+  // Tampilkan label tetap
+  lcd.setCursor(0, 0);
+  lcd.write(byte(0));            // Ikon termometer
+  lcd.print(" Suhu      : ");
+
+  lcd.setCursor(0, 1);
+  lcd.write(byte(1));            // Ikon tetes air
+  lcd.print(" Kelembaban: ");
+
+  lcd.setCursor(0, 2);
+  lcd.print("  Heat Index: ");
+
+  lcd.setCursor(0, 3);
+  lcd.print("--------------------");
+}
+
+// ─── Fungsi Update Nilai di LCD ─────────────────
+void updateNilaiLCD(float suhu, float kelembaban, float heatIndex) {
+  // Baris 0: Suhu
+  lcd.setCursor(13, 0);
+  if (isnan(suhu)) {
+    lcd.print("ERROR  ");
+  } else {
+    lcd.print(suhu, 1);
+    lcd.write(byte(2));  // Simbol derajat
+    lcd.print("C ");
+  }
+
+  // Baris 1: Kelembaban
+  lcd.setCursor(13, 1);
+  if (isnan(kelembaban)) {
+    lcd.print("ERROR  ");
+  } else {
+    lcd.print(kelembaban, 1);
+    lcd.print("%   ");
+  }
+
+  // Baris 2: Heat Index
+  lcd.setCursor(14, 2);
+  if (isnan(heatIndex)) {
+    lcd.print("ERROR ");
+  } else {
+    lcd.print(heatIndex, 1);
+    lcd.write(byte(2));
+    lcd.print("C ");
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  SETUP
 // ─────────────────────────────────────────────────────────────
@@ -201,10 +295,18 @@ void setup() {
   // Inisialisasi LCD
   lcd.init();
   lcd.backlight();
+
+  // Daftarkan custom character
+  lcd.createChar(0, iconThermo);
+  lcd.createChar(1, iconDrop);
+  lcd.createChar(2, iconDegree);
+
   lcd.setCursor(0, 0);
   lcd.print(F("ClimateOS ESP32"));
-  lcd.setCursor(0, 1);
+  lcd.setCursor(0, 2);
   lcd.print(F("Starting..."));
+  lcd.setCursor(0, 3);
+  lcd.print(F("Connecting to WiFi.."));
   Serial.println(F("[LCD] Diinisialisasi"));
 
   // Sambungkan ke WiFi
@@ -215,6 +317,9 @@ void setup() {
   delay(3000);
 
   Serial.println("[System] ✓ Siap mengirim data setiap " + String(SEND_INTERVAL_MS / 1000) + " detik.");
+
+  // Tampilkan header intro
+  tampilkanHeader();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -237,24 +342,16 @@ void loop() {
       Serial.println("[Sensor] Suhu     : " + String(temperature, 1) + " °C");
       Serial.println("[Sensor] Kelembaban: " + String(humidity, 1) + " %");
 
-      // Menampilkan di LCD
-      lcd.clear();
-      
-      // Baris 1: Suhu & Kelembaban
-      lcd.setCursor(0, 0);
-      lcd.print("T:");
-      lcd.print(temperature, 1);
-      lcd.print((char)223); // Simbol derajat
-      lcd.print("C H:");
-      lcd.print(humidity, 1);
-      lcd.print("%");
+      // Update tampilan LCD
+      float heatIndex = dht.computeHeatIndex(temperature, humidity, false);
+      updateNilaiLCD(temperature, humidity, heatIndex);
 
-      // Baris 2: Status WiFi
-      lcd.setCursor(0, 1);
+      // Baris 4: Status WiFi
+      lcd.setCursor(0, 3);
       if (WiFi.status() == WL_CONNECTED) {
-        lcd.print("WiFi: OK");
+        lcd.print("WiFi: OK            ");
       } else {
-        lcd.print("WiFi: Disconn");
+        lcd.print("WiFi: Disconnected  ");
       }
 
       bool success = sendTelemetry(temperature, humidity);
@@ -269,12 +366,8 @@ void loop() {
         }
       }
     } else {
-      // Menampilkan error di LCD
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Sensor Error!");
-      lcd.setCursor(0, 1);
-      lcd.print("Cek Wiring DHT");
+      // Update tampilan LCD (menjadi ERROR)
+      updateNilaiLCD(NAN, NAN, NAN);
 
       // Sensor gagal baca — kedip lambat
       for (int i = 0; i < 4; i++) {
