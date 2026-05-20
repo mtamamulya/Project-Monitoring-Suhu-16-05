@@ -502,8 +502,8 @@ async function fetchWeather() {
 
 // ── POLLING ───────────────────────────────────────────────────────────────────
 function startPolling() {
-  fetchLatest(); fetchDashChart(); fetchStats(); fetchWeather();
-  setInterval(() => { fetchLatest(); fetchDashChart(); }, CONFIG.POLL_INTERVAL_MS);
+  fetchLatest(); fetchDashChart(); fetchStats(); fetchWeather(); fetchSensorStatus();
+  setInterval(() => { fetchLatest(); fetchDashChart(); fetchSensorStatus(); }, CONFIG.POLL_INTERVAL_MS);
   setInterval(fetchStats,   CONFIG.STATS_INTERVAL_MS);
   setInterval(fetchWeather, CONFIG.WEATHER_INTERVAL_MS);
 }
