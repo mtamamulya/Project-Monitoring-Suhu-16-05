@@ -20,7 +20,7 @@ from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-from services.notifier import process_alert, check_offline_sensors, ROOM_CONFIG
+from services.notifier import process_alert, check_offline_sensors, ROOM_CONFIG, update_last_seen
 from services.weather import get_outdoor_weather
 from routes.ai import handle_chat
 
@@ -201,7 +201,13 @@ def telemetry():
         "timestamp": now,
     })
 
-    # 3. Medical Alert System (Level 1-3)
+    # 3. Track last seen for offline detection
+    try:
+        update_last_seen(device_id)
+    except Exception as exc:
+        logger.warning("update_last_seen skipped: %s", exc)
+
+    # 4. Medical Alert System (Level 1-3)
     try:
         process_alert(temperature, humidity, device_id)
     except Exception as exc:

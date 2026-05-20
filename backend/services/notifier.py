@@ -200,8 +200,82 @@ def process_alert(temperature: float, humidity: float, device_id: str):
             send_telegram(tg_token, tg_direktur, msg)
 
 def check_offline_sensors():
-    # Called periodically to check if sensors are offline > 5 mins
+    """
+    Check if any registered sensor hasn't sent data in >5 minutes.
+    If offline, send Level 3 alert to Telegram Direktur.
+    Called from /api/sensor-status endpoint.
+    """
     _load_states()
     now = datetime.now(timezone.utc)
-    # This logic will be triggered from app.py /api/telemetry or cron, but we can do it in app.py logic
-    # Actually wait, app.py has /api/sensor-status, we can trigger Level 3 offline there.
+    
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    tg_direktur = os.environ.get("TELEGRAM_CHAT_ID_DIREKTUR")
+    
+    if not tg_token or not tg_direktur:
+        logger.warning("Telegram Direktur config missing, skip offline check")
+        return
+
+    # We need access to the telemetry buffer from app.py
+    # Instead, we track last_seen per device in _alert_states
+    for device_id, room in ROOM_CONFIG.items():
+        state = _alert_states.get(device_id, {})
+        last_seen_str = state.get("last_data_at")
+        
+        if not last_seen_str:
+            # Never received data — don't spam, just skip
+            continue
+        
+        try:
+            last_seen = datetime.fromisoformat(last_seen_str)
+        except (ValueError, TypeError):
+            continue
+        
+        diff_seconds = (now - last_seen).total_seconds()
+        already_notified = state.get("offline_notified", False)
+        
+        # Sensor offline > 5 minutes and not yet notified
+        if diff_seconds > 300 and not already_notified:
+            now_wib = datetime.now(WIB).strftime("%H:%M:%S WIB")
+            last_wib = last_seen.astimezone(WIB).strftime("%H:%M:%S WIB")
+            offline_mins = int(diff_seconds / 60)
+            
+            msg = (
+                f"🔴 <b>SENSOR OFFLINE</b> — {room['name']}\n"
+                f"⚠️ <b>Sensor tidak mengirim data > {offline_mins} menit</b>\n"
+                f"Device: {device_id}\n"
+                f"Data terakhir: {last_wib}\n"
+                f"Waktu deteksi: {now_wib}\n"
+                f"Periksa koneksi sensor dan WiFi segera."
+            )
+            send_telegram(tg_token, tg_direktur, msg)
+            logger.info(f"Offline alert sent for {device_id} to Direktur")
+            
+            state["offline_notified"] = True
+            _alert_states[device_id] = state
+            _save_state(device_id, state)
+        
+        # Sensor back online — reset offline flag
+        elif diff_seconds <= 300 and already_notified:
+            now_wib = datetime.now(WIB).strftime("%H:%M:%S WIB")
+            msg = (
+                f"✅ <b>SENSOR ONLINE</b> — {room['name']}\n"
+                f"Sensor {device_id} kembali aktif.\n"
+                f"Waktu: {now_wib}"
+            )
+            send_telegram(tg_token, tg_direktur, msg)
+            logger.info(f"Online recovery sent for {device_id} to Direktur")
+            
+            state["offline_notified"] = False
+            _alert_states[device_id] = state
+            _save_state(device_id, state)
+
+
+def update_last_seen(device_id: str):
+    """Called from app.py on every telemetry POST to track when sensor last sent data."""
+    _load_states()
+    now = datetime.now(timezone.utc)
+    state = _alert_states.get(device_id, {})
+    state["last_data_at"] = now.isoformat()
+    state["offline_notified"] = False  # Reset offline flag on every data received
+    _alert_states[device_id] = state
+    _save_state(device_id, state)
