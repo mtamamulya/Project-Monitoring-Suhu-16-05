@@ -762,7 +762,7 @@ function init() {
   attachListeners();
   startClock();
   startPolling();
-  navigateTo('dashboard');  // render halaman pertama setelah semua siap
+  initAuth();  // Initialize Firebase Auth & Login Screen
   console.info('[MediClimate RS v2.1] OK — backend:', CONFIG.API_BASE_URL);
 }
 
