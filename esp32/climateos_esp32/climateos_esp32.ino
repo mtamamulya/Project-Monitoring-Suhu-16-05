@@ -22,8 +22,7 @@
  *  - ArduinoJson by Benoit Blanchon
  *  - WiFiClientSecure (built-in ESP32 core)
  *  - HTTPClient (built-in ESP32 core)
- *  - Adafruit GFX Library (untuk OLED)
- *  - Adafruit SSD1306 (untuk OLED)
+ *  - LiquidCrystal I2C by Frank de Brabander (untuk LCD I2C)
  * ============================================================
  */
 
@@ -32,21 +31,48 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
-#include <SPI.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
-// ── Konfigurasi OLED SPI 7-Pin ──────────────────────────────
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_MOSI   23 // D1 (SDA)
-#define OLED_CLK    18 // D0 (SCL)
-#define OLED_DC     16 // DC
-#define OLED_CS     5  // CS
-#define OLED_RESET  17 // RES
+// ── Konfigurasi LCD I2C 20x4 ──────────────────
+#define LCD_ADDR  0x27
+#define LCD_COLS  20
+#define LCD_ROWS  4
+LiquidCrystal_I2C lcd(LCD_ADDR, LCD_COLS, LCD_ROWS);
 
-// Hardware SPI Constructor (Lebih cepat, menggunakan pin SPI default VSPI/HSPI ESP32)
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+// ── Custom Character (Ikon Termometer & Tetes) ─
+byte iconThermo[8] = {
+  0b00100,
+  0b01010,
+  0b01010,
+  0b01110,
+  0b01110,
+  0b11111,
+  0b11111,
+  0b01110
+};
+
+byte iconDrop[8] = {
+  0b00100,
+  0b00100,
+  0b01010,
+  0b01010,
+  0b10001,
+  0b10001,
+  0b10001,
+  0b01110
+};
+
+byte iconDegree[8] = {
+  0b01100,
+  0b10010,
+  0b10010,
+  0b01100,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000
+};
 
 
 // ── KONFIGURASI — UBAH BAGIAN INI ────────────────────────────
@@ -189,6 +215,64 @@ bool sendTelemetry(float temperature, float humidity) {
   }
 }
 
+// ─── Fungsi Tampilkan Header LCD ────────────────
+void tampilkanHeader() {
+  lcd.clear();
+  lcd.setCursor(3, 0);
+  lcd.print("=== MONITOR ===");
+  lcd.setCursor(2, 1);
+  lcd.print("Suhu & Kelembaban");
+  delay(2000);
+  lcd.clear();
+
+  // Tampilkan label tetap
+  lcd.setCursor(0, 0);
+  lcd.write(byte(0));            // Ikon termometer
+  lcd.print(" Suhu      : ");
+
+  lcd.setCursor(0, 1);
+  lcd.write(byte(1));            // Ikon tetes air
+  lcd.print(" Kelembaban: ");
+
+  lcd.setCursor(0, 2);
+  lcd.print("  Heat Index: ");
+
+  lcd.setCursor(0, 3);
+  lcd.print("--------------------");
+}
+
+// ─── Fungsi Update Nilai di LCD ─────────────────
+void updateNilaiLCD(float suhu, float kelembaban, float heatIndex) {
+  // Baris 0: Suhu
+  lcd.setCursor(13, 0);
+  if (isnan(suhu)) {
+    lcd.print("ERROR  ");
+  } else {
+    lcd.print(suhu, 1);
+    lcd.write(byte(2));  // Simbol derajat
+    lcd.print("C ");
+  }
+
+  // Baris 1: Kelembaban
+  lcd.setCursor(13, 1);
+  if (isnan(kelembaban)) {
+    lcd.print("ERROR  ");
+  } else {
+    lcd.print(kelembaban, 1);
+    lcd.print("%   ");
+  }
+
+  // Baris 2: Heat Index
+  lcd.setCursor(14, 2);
+  if (isnan(heatIndex)) {
+    lcd.print("ERROR ");
+  } else {
+    lcd.print(heatIndex, 1);
+    lcd.write(byte(2));
+    lcd.print("C ");
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  SETUP
 // ─────────────────────────────────────────────────────────────
@@ -208,20 +292,22 @@ void setup() {
   dht.begin();
   Serial.println("[Sensor] DHT22 diinisialisasi pada GPIO " + String(DHT_PIN));
 
-  // Inisialisasi OLED
-  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
-  if(!display.begin(SSD1306_SWITCHCAPVCC)) {
-    Serial.println(F("[OLED] SSD1306 allocation failed"));
-  } else {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0, 0);
-    display.println(F("ClimateOS ESP32"));
-    display.println(F("Starting..."));
-    display.display();
-    Serial.println(F("[OLED] Diinisialisasi"));
-  }
+  // Inisialisasi LCD
+  lcd.init();
+  lcd.backlight();
+
+  // Daftarkan custom character
+  lcd.createChar(0, iconThermo);
+  lcd.createChar(1, iconDrop);
+  lcd.createChar(2, iconDegree);
+
+  lcd.setCursor(0, 0);
+  lcd.print(F("ClimateOS ESP32"));
+  lcd.setCursor(0, 2);
+  lcd.print(F("Starting..."));
+  lcd.setCursor(0, 3);
+  lcd.print(F("Connecting to WiFi.."));
+  Serial.println(F("[LCD] Diinisialisasi"));
 
   // Sambungkan ke WiFi
   connectWiFi();
@@ -231,6 +317,9 @@ void setup() {
   delay(3000);
 
   Serial.println("[System] ✓ Siap mengirim data setiap " + String(SEND_INTERVAL_MS / 1000) + " detik.");
+
+  // Tampilkan header intro
+  tampilkanHeader();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -253,38 +342,17 @@ void loop() {
       Serial.println("[Sensor] Suhu     : " + String(temperature, 1) + " °C");
       Serial.println("[Sensor] Kelembaban: " + String(humidity, 1) + " %");
 
-      // Menampilkan di OLED
-      display.clearDisplay();
-      display.setTextColor(SSD1306_WHITE);
-      
-      // Menampilkan Suhu
-      display.setTextSize(2);
-      display.setCursor(0, 0);
-      display.print(temperature, 1);
-      display.print((char)247); // Simbol derajat
-      display.println("C");
+      // Update tampilan LCD
+      float heatIndex = dht.computeHeatIndex(temperature, humidity, false);
+      updateNilaiLCD(temperature, humidity, heatIndex);
 
-      // Menampilkan Kelembaban
-      display.setTextSize(1);
-      display.setCursor(0, 25);
-      display.print("Humidity: ");
-      display.print(humidity, 1);
-      display.println(" %");
-
-      // Menampilkan status WiFi
-      display.setCursor(0, 45);
+      // Baris 4: Status WiFi
+      lcd.setCursor(0, 3);
       if (WiFi.status() == WL_CONNECTED) {
-        display.println("WiFi: OK");
+        lcd.print("WiFi: OK            ");
       } else {
-        display.println("WiFi: Disconn");
+        lcd.print("WiFi: Disconnected  ");
       }
-      
-      // Menampilkan Device ID
-      display.setCursor(0, 55);
-      display.print("ID: ");
-      display.print(DEVICE_ID);
-      
-      display.display();
 
       bool success = sendTelemetry(temperature, humidity);
 
@@ -298,14 +366,8 @@ void loop() {
         }
       }
     } else {
-      // Menampilkan error di OLED
-      display.clearDisplay();
-      display.setTextSize(1);
-      display.setTextColor(SSD1306_WHITE);
-      display.setCursor(0, 0);
-      display.println("Sensor Error!");
-      display.println("Cek Wiring DHT");
-      display.display();
+      // Update tampilan LCD (menjadi ERROR)
+      updateNilaiLCD(NAN, NAN, NAN);
 
       // Sensor gagal baca — kedip lambat
       for (int i = 0; i < 4; i++) {
