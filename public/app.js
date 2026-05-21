@@ -346,44 +346,117 @@ function updateAnalysisPage() {
 }
 
 function updateComfort(temp, hum, outdoor) {
+  // Helper: set left-border color on a card
+  function setCardBorder(cardId, color) {
+    const card = $(cardId);
+    if (card) card.style.borderLeftColor = color;
+  }
+
+  // ── 1. Suhu Ruangan (Kemenkes RI: 22–26°C untuk bangsal anak) ──
   let tl = '—', tn = '—';
+  let thermalColor = 'var(--muted)';
   if (temp != null) {
-    if      (temp < 18)  { tl = '❄ Cold';       tn = 'Di bawah rentang nyaman'; }
-    else if (temp <= 24) { tl = '✓ Comfortable'; tn = 'Rentang suhu ideal'; }
-    else if (temp <= 28) { tl = '○ Acceptable';  tn = 'Sedikit hangat, masih nyaman'; }
-    else if (temp <= 32) { tl = '⚠ Warm';        tn = 'Ventilasi disarankan'; }
-    else                 { tl = '🔥 Hot';         tn = 'Di atas ambang kenyamanan'; }
+    if      (temp < 20)  { tl = '❄ Hipotermia Risk';   tn = 'Suhu terlalu rendah — risiko hipotermia pada neonatus'; thermalColor = 'var(--sky)'; }
+    else if (temp < 22)  { tl = '⚠ Di Bawah Standar';  tn = 'Di bawah ambang Kemenkes (22°C), naikkan suhu ruangan'; thermalColor = 'var(--amber)'; }
+    else if (temp <= 26) { tl = '✓ Sesuai Standar';     tn = 'Dalam rentang 22–26°C — optimal untuk pasien anak'; thermalColor = 'var(--emerald)'; }
+    else if (temp <= 28) { tl = '⚠ Sedikit Tinggi';     tn = 'Di atas standar, risiko dehidrasi pada pasien anak'; thermalColor = 'var(--amber)'; }
+    else if (temp <= 32) { tl = '⚠ Panas';              tn = 'Suhu tinggi — bisa memperburuk demam, segera ventilasi'; thermalColor = 'var(--coral)'; }
+    else                 { tl = '🔴 Kritis';            tn = 'Bahaya heat stress — tindakan pendinginan segera'; thermalColor = 'var(--crit)'; }
   }
   setText('comfort-thermal', tl); setText('comfort-thermal-note', tn);
+  setCardBorder('comfort-thermal-card', thermalColor);
 
+  // ── 2. Kelembaban (WHO: 40–60% RH untuk fasilitas kesehatan) ──
   let hl = '—', hn = '—';
+  let humColor = 'var(--muted)';
   if (hum != null) {
-    if      (hum < 30)  { hl = '○ Too Dry'; hn = 'Dapat menyebabkan iritasi'; }
-    else if (hum <= 50) { hl = '✓ Ideal';   hn = 'Rentang kelembaban terbaik'; }
-    else if (hum <= 65) { hl = '✓ Good';    hn = 'Masih dalam zona nyaman'; }
-    else if (hum <= 75) { hl = '⚠ Humid';   hn = 'Risiko jamur; buka ventilasi'; }
-    else                { hl = '⚠ Muggy';   hn = 'Risiko jamur & tidak nyaman'; }
+    if      (hum < 30)  { hl = '⚠ Sangat Kering'; hn = 'Iritasi mukosa, dehidrasi kulit, risiko infeksi saluran napas'; humColor = 'var(--amber)'; }
+    else if (hum < 40)  { hl = '○ Agak Kering';   hn = 'Sedikit di bawah standar WHO, pantau kondisi pasien'; humColor = 'var(--amber)'; }
+    else if (hum <= 60) { hl = '✓ Sesuai Standar'; hn = 'Dalam rentang 40–60% — optimal untuk pemulihan pasien'; humColor = 'var(--emerald)'; }
+    else if (hum <= 70) { hl = '⚠ Agak Lembab';   hn = 'Mulai melebihi standar, risiko kontaminasi mikrobial'; humColor = 'var(--amber)'; }
+    else                { hl = '🔴 Terlalu Lembab'; hn = 'Pertumbuhan jamur & bakteri aktif — berbahaya untuk imunokompromais'; humColor = 'var(--crit)'; }
   }
   setText('comfort-hum', hl); setText('comfort-hum-note', hn);
+  setCardBorder('comfort-hum-card', humColor);
 
+  // ── 3. Risiko Infeksi (berdasarkan kombinasi suhu + kelembaban) ──
+  let il = '—', iNote = '—';
+  let infColor = 'var(--muted)';
+  if (temp != null && hum != null) {
+    const humHigh = hum > 60;
+    const tempWarm = temp > 26;
+    if (humHigh && tempWarm) {
+      il = '🔴 Tinggi'; iNote = 'Suhu hangat + kelembaban tinggi = kondisi ideal pertumbuhan patogen'; infColor = 'var(--crit)';
+    } else if (humHigh) {
+      il = '⚠ Sedang'; iNote = 'Kelembaban tinggi meningkatkan risiko jamur Aspergillus & Candida'; infColor = 'var(--amber)';
+    } else if (hum < 30) {
+      il = '⚠ Sedang'; iNote = 'Udara kering mengurangi pertahanan mukosa pasien terhadap infeksi'; infColor = 'var(--amber)';
+    } else {
+      il = '✓ Rendah'; iNote = 'Suhu & kelembaban dalam zona aman — risiko kontaminasi minimal'; infColor = 'var(--emerald)';
+    }
+  }
+  setText('comfort-infection', il); setText('comfort-infection-note', iNote);
+  setCardBorder('comfort-infection-card', infColor);
+
+  // ── 4. Ventilasi & Sirkulasi (delta indoor vs outdoor) ──
   let dl = '—', dn = '—';
+  let deltaColor = 'var(--muted)';
   if (temp != null && outdoor?.temperature != null) {
     const d = temp - outdoor.temperature;
-    if (Math.abs(d) < 1) { dl = '≈ Setara';                       dn = 'Sama dengan suhu luar'; }
-    else if (d > 0)      { dl = '+' + d.toFixed(1) + '°C warmer'; dn = d > 5 ? 'Pertimbangkan ventilasi' : 'Sedikit di atas suhu luar'; }
-    else                 { dl = d.toFixed(1) + '°C cooler';        dn = 'Ruangan lebih sejuk dari luar'; }
+    if (Math.abs(d) < 1)  { dl = '≈ Setara';                        dn = 'Tidak ada perbedaan signifikan — ventilasi alami berjalan'; deltaColor = 'var(--emerald)'; }
+    else if (d > 5)       { dl = '+' + d.toFixed(1) + '°C lebih panas'; dn = 'Panas terperangkap — perlu buka ventilasi atau nyalakan AC'; deltaColor = 'var(--crit)'; }
+    else if (d > 2)       { dl = '+' + d.toFixed(1) + '°C lebih hangat'; dn = 'Sedikit lebih hangat dari luar — pertimbangkan sirkulasi udara'; deltaColor = 'var(--amber)'; }
+    else if (d > 0)       { dl = '+' + d.toFixed(1) + '°C'; dn = 'Sedikit di atas suhu luar, masih wajar'; deltaColor = 'var(--emerald)'; }
+    else if (d < -5)      { dl = d.toFixed(1) + '°C lebih dingin'; dn = 'Pendinginan aktif bekerja baik, pastikan tidak overcooling'; deltaColor = 'var(--sky)'; }
+    else                  { dl = d.toFixed(1) + '°C lebih sejuk'; dn = 'Ruangan lebih sejuk — AC/ventilasi berfungsi baik'; deltaColor = 'var(--emerald)'; }
   }
   setText('comfort-delta', dl); setText('comfort-delta-note', dn);
+  setCardBorder('comfort-delta-card', deltaColor);
 
-  let ol = '—', on = '—';
+  // ── 5. Kenyamanan Pasien (kombinasi suhu + kelembaban untuk anak/neonatal) ──
+  let pl = '—', pn = '—';
+  let patientColor = 'var(--muted)';
   if (temp != null && hum != null) {
-    const ok  = temp >= 20 && temp <= 28 && hum >= 40 && hum <= 65;
-    const bad = temp > 32 || hum > 75;
-    if      (bad) { ol = '⚠ Perlu perhatian'; on = 'Kondisi di luar zona nyaman'; }
-    else if (ok)  { ol = '✓ Baik';            on = 'Semua metrik dalam batas'; }
-    else          { ol = '○ Cukup Baik';      on = 'Ada sedikit deviasi'; }
+    const tempOk = temp >= 22 && temp <= 26;
+    const humOk  = hum >= 40 && hum <= 60;
+    if (tempOk && humOk) {
+      pl = '✓ Optimal'; pn = 'Kondisi ideal untuk pemulihan pasien anak & neonatal'; patientColor = 'var(--emerald)';
+    } else if ((temp >= 20 && temp <= 28) && (hum >= 35 && hum <= 65)) {
+      pl = '○ Cukup Nyaman'; pn = 'Masih dapat ditoleransi, pantau kondisi pasien secara berkala'; patientColor = 'var(--amber)';
+    } else {
+      pl = '⚠ Tidak Nyaman'; pn = 'Kondisi di luar zona nyaman — risiko gangguan tidur & pemulihan lambat'; patientColor = 'var(--crit)';
+    }
+  }
+  setText('comfort-patient', pl); setText('comfort-patient-note', pn);
+  setCardBorder('comfort-patient-card', patientColor);
+
+  // ── 6. Status Klinis Keseluruhan ──
+  let ol = '—', on = '—', oa = '—';
+  let overallColor = 'var(--muted)';
+  if (temp != null && hum != null) {
+    const tempOk  = temp >= 22 && temp <= 26;
+    const humOk   = hum >= 40 && hum <= 60;
+    const tempBad = temp > 32 || temp < 18;
+    const humBad  = hum > 75 || hum < 25;
+    const infRisk = hum > 60 && temp > 26;
+
+    if (tempBad || humBad || infRisk) {
+      ol = '🔴 Perlu Tindakan Segera'; on = 'Satu atau lebih parameter di luar batas aman klinis';
+      oa = '⚡ Rekomendasi: Laporkan ke penanggung jawab bangsal & periksa HVAC';
+      overallColor = 'var(--crit)';
+    } else if (tempOk && humOk) {
+      ol = '✓ Aman & Sesuai Standar'; on = 'Semua parameter dalam batas standar Kemenkes/WHO';
+      oa = '✓ Tidak diperlukan tindakan — lanjutkan monitoring rutin';
+      overallColor = 'var(--emerald)';
+    } else {
+      ol = '⚠ Perlu Perhatian'; on = 'Ada parameter yang mendekati atau sedikit melebihi batas standar';
+      oa = '📋 Rekomendasi: Pantau perubahan dalam 30 menit ke depan';
+      overallColor = 'var(--amber)';
+    }
   }
   setText('comfort-overall', ol); setText('comfort-overall-note', on);
+  setText('comfort-overall-action', oa);
+  setCardBorder('comfort-overall-card', overallColor);
 }
 
 // ── CLOCK ─────────────────────────────────────────────────────────────────────

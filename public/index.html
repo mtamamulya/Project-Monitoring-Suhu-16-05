@@ -1243,32 +1243,82 @@
             </div>
           </div>
 
-          <!-- Comfort assessment -->
+          <!-- Comfort Assessment (Clinical) -->
           <div class="card" style="padding: 20px;">
-            <div style="margin-bottom: 14px;">
-              <span class="label-strong">Comfort Assessment</span>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div>
+                <span class="label-strong">Comfort Assessment — Klinis</span>
+                <p class="text-muted" style="font-size: 11px; margin-top: 2px;">Berdasarkan standar Kemenkes RI & WHO untuk bangsal anak/neonatal</p>
+              </div>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;" id="comfort-grid">
-              <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 14px;">
-                <p class="label" style="font-size: 10px;">Thermal Comfort</p>
-                <p id="comfort-thermal" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px;">—</p>
-                <p id="comfort-thermal-note" class="text-muted" style="font-size: 11.5px; margin-top: 4px;">—</p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;" id="comfort-grid">
+
+              <!-- Thermal Compliance -->
+              <div id="comfort-thermal-card" style="background: var(--bg); border: 1px solid var(--hair); border-left: 3px solid var(--muted); border-radius: 10px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                  <svg style="width:14px;height:14px;color:var(--coral);flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                  <p class="label" style="font-size: 10px;">Suhu Ruangan</p>
+                </div>
+                <p id="comfort-thermal" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 4px;">—</p>
+                <p id="comfort-thermal-note" class="text-muted" style="font-size: 11px; margin-top: 3px;">—</p>
+                <p id="comfort-thermal-ref" class="text-muted" style="font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hair); font-style: italic;">Standar: 22–26°C (Kemenkes)</p>
               </div>
-              <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 14px;">
-                <p class="label" style="font-size: 10px;">Humidity Level</p>
-                <p id="comfort-hum" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px;">—</p>
-                <p id="comfort-hum-note" class="text-muted" style="font-size: 11.5px; margin-top: 4px;">—</p>
+
+              <!-- Humidity Compliance -->
+              <div id="comfort-hum-card" style="background: var(--bg); border: 1px solid var(--hair); border-left: 3px solid var(--muted); border-radius: 10px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                  <svg style="width:14px;height:14px;color:var(--sky);flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                  <p class="label" style="font-size: 10px;">Kelembaban Ruangan</p>
+                </div>
+                <p id="comfort-hum" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 4px;">—</p>
+                <p id="comfort-hum-note" class="text-muted" style="font-size: 11px; margin-top: 3px;">—</p>
+                <p id="comfort-hum-ref" class="text-muted" style="font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hair); font-style: italic;">Standar: 40–60% RH (WHO)</p>
               </div>
-              <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 14px;">
-                <p class="label" style="font-size: 10px;">vs. Outdoor</p>
-                <p id="comfort-delta" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px;">—</p>
-                <p id="comfort-delta-note" class="text-muted" style="font-size: 11.5px; margin-top: 4px;">—</p>
+
+              <!-- Infection Risk -->
+              <div id="comfort-infection-card" style="background: var(--bg); border: 1px solid var(--hair); border-left: 3px solid var(--muted); border-radius: 10px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                  <svg style="width:14px;height:14px;color:var(--amber);flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                  <p class="label" style="font-size: 10px;">Risiko Infeksi</p>
+                </div>
+                <p id="comfort-infection" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 4px;">—</p>
+                <p id="comfort-infection-note" class="text-muted" style="font-size: 11px; margin-top: 3px;">—</p>
+                <p class="text-muted" style="font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hair); font-style: italic;">Kelembaban &gt;60% → pertumbuhan jamur/bakteri</p>
               </div>
-              <div style="background: var(--bg); border: 1px solid var(--hair); border-radius: 10px; padding: 14px;">
-                <p class="label" style="font-size: 10px;">Overall</p>
-                <p id="comfort-overall" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px;">—</p>
-                <p id="comfort-overall-note" class="text-muted" style="font-size: 11.5px; margin-top: 4px;">—</p>
+
+              <!-- Ventilation -->
+              <div id="comfort-delta-card" style="background: var(--bg); border: 1px solid var(--hair); border-left: 3px solid var(--muted); border-radius: 10px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                  <svg style="width:14px;height:14px;color:var(--teal);flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+                  <p class="label" style="font-size: 10px;">Ventilasi & Sirkulasi</p>
+                </div>
+                <p id="comfort-delta" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 4px;">—</p>
+                <p id="comfort-delta-note" class="text-muted" style="font-size: 11px; margin-top: 3px;">—</p>
+                <p class="text-muted" style="font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hair); font-style: italic;">Δ indoor vs outdoor menunjukkan efektivitas ventilasi</p>
               </div>
+
+              <!-- Patient Comfort -->
+              <div id="comfort-patient-card" style="background: var(--bg); border: 1px solid var(--hair); border-left: 3px solid var(--muted); border-radius: 10px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                  <svg style="width:14px;height:14px;color:var(--emerald);flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                  <p class="label" style="font-size: 10px;">Kenyamanan Pasien</p>
+                </div>
+                <p id="comfort-patient" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 4px;">—</p>
+                <p id="comfort-patient-note" class="text-muted" style="font-size: 11px; margin-top: 3px;">—</p>
+                <p class="text-muted" style="font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hair); font-style: italic;">Gabungan suhu + kelembaban untuk anak/neonatal</p>
+              </div>
+
+              <!-- Overall Clinical -->
+              <div id="comfort-overall-card" style="background: var(--bg); border: 1px solid var(--hair); border-left: 3px solid var(--muted); border-radius: 10px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                  <svg style="width:14px;height:14px;color:var(--ink-2);flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                  <p class="label" style="font-size: 10px;">Status Klinis Keseluruhan</p>
+                </div>
+                <p id="comfort-overall" style="font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 4px;">—</p>
+                <p id="comfort-overall-note" class="text-muted" style="font-size: 11px; margin-top: 3px;">—</p>
+                <p id="comfort-overall-action" class="text-muted" style="font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hair); font-weight: 500;">—</p>
+              </div>
+
             </div>
           </div>
         </div>
