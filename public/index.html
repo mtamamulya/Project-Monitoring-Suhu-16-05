@@ -518,6 +518,37 @@
     @keyframes hb-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.9); } }
     .hb-dot { animation: hb-dot 2s ease infinite; }
 
+    /* ── Sensor disconnected banner ── */
+    .sensor-disconnect-banner {
+      display: none; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 10px; margin-bottom: 16px;
+      background: var(--crit-soft); border: 1px solid var(--crit);
+      color: var(--crit); font-size: 13px; font-weight: 500;
+      animation: banner-fade-in 0.35s ease both;
+    }
+    .sensor-disconnect-banner.show { display: flex; }
+    .sensor-disconnect-banner .disconnect-icon {
+      width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+      background: var(--crit); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sensor-disconnect-banner .disconnect-info { flex: 1; }
+    .sensor-disconnect-banner .disconnect-title {
+      font-size: 13px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 2px;
+    }
+    .sensor-disconnect-banner .disconnect-sub {
+      font-size: 11.5px; font-weight: 400; opacity: 0.8;
+    }
+    @keyframes banner-fade-in {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Sensor pill offline state ── */
+    .pill.sensor-offline { border-color: var(--crit); background: var(--crit-soft); }
+    .pill.sensor-offline .dot { background: var(--crit); box-shadow: 0 0 0 3px oklch(0.58 0.20 28 / 0.2); }
+    .pill.sensor-offline span:not(.dot) { color: var(--crit); font-weight: 600; }
+
     /* ── Card entrance ── */
     @keyframes slide-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .card-enter { animation: slide-up 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
@@ -811,6 +842,20 @@
 
         <!-- ════════ PAGE: DASHBOARD ════════ -->
         <div id="page-dashboard" class="page active">
+
+          <!-- Sensor Disconnect Banner -->
+          <div class="sensor-disconnect-banner" id="dashboard-disconnect-banner">
+            <div class="disconnect-icon">
+              <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728M5.636 18.364a9 9 0 010-12.728"/>
+                <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="disconnect-info">
+              <div class="disconnect-title">⚠ Sensor Terputus — Tidak ada data masuk</div>
+              <div class="disconnect-sub" id="disconnect-last-time">Menunggu koneksi sensor ESP32…</div>
+            </div>
+          </div>
 
           <!-- Bento grid -->
           <div class="bento-grid" style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 16px; margin-bottom: 16px;">

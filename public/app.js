@@ -879,18 +879,58 @@ async function fetchSensorStatus() {
     const data = await res.json();
     let onlineCount = 0;
     let hasOffline = false;
+    let allOffline = true;
+    let lastSeenAny = null;
     
     data.forEach(s => {
       if (!s.unknown) {
-        if (s.status === 'online' || s.status === 'warning') onlineCount++;
+        if (s.status === 'online' || s.status === 'warning') {
+          onlineCount++;
+          allOffline = false;
+        }
         if (s.status === 'offline') hasOffline = true;
+        // Track the most recent last_seen across all sensors
+        if (s.last_seen) {
+          const seen = new Date(s.last_seen);
+          if (!lastSeenAny || seen > lastSeenAny) lastSeenAny = seen;
+        }
       }
     });
     
+    // Update sensor pill text
     if ($('sensor-pill-text')) {
       $('sensor-pill-text').textContent = `${onlineCount}/${ROOM_CONFIG.length} Sensor Online`;
     }
     
+    // Toggle sensor pill offline/online styling
+    const sensorPill = $('header-sensor-pill');
+    if (sensorPill) {
+      if (onlineCount === 0) {
+        sensorPill.classList.add('sensor-offline');
+      } else {
+        sensorPill.classList.remove('sensor-offline');
+      }
+    }
+    
+    // Dashboard disconnect banner
+    const dashBanner = $('dashboard-disconnect-banner');
+    if (dashBanner) {
+      if (onlineCount === 0) {
+        dashBanner.classList.add('show');
+        const subEl = $('disconnect-last-time');
+        if (subEl) {
+          if (lastSeenAny) {
+            subEl.textContent = 'Data terakhir diterima: ' + lastSeenAny.toLocaleString('id-ID', { hour12: false });
+          } else {
+            subEl.textContent = 'Menunggu koneksi sensor ESP32…';
+          }
+        }
+      } else {
+        dashBanner.classList.remove('show');
+      }
+    }
+    
+    // Bangsal offline warning banner
     if (hasOffline && $('offline-warning-banner')) {
       $('offline-warning-banner').style.display = 'flex';
     } else if ($('offline-warning-banner')) {
