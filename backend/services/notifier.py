@@ -103,7 +103,9 @@ def process_alert(temperature: float, humidity: float, device_id: str):
         if d_temp > 2.0 and d_hum <= 10.0:
             if (now - c_start).total_seconds() < 180:
                 condition_level = 1 # Downgrade to level 1 if < 3 mins
-    else:
+    elif condition_level == 0:
+        # Only reset timer when conditions return to normal, NOT on brief
+        # fluctuations to Level 1 or Level 3 which would restart the 3-min clock
         state["critical_start_at"] = None
 
     # Handle Escalation Level 2 -> Level 3 (unresolved for 15 mins)

@@ -22,7 +22,7 @@ const CONFIG = {
   },
 
   API_BASE_URL:        'https://climateos-backend.onrender.com',
-  POLL_INTERVAL_MS:    30_000,
+  POLL_INTERVAL_MS:    10_000,
   WEATHER_INTERVAL_MS: 600_000,
   STATS_INTERVAL_MS:   120_000,
   GAUGE_ARC:           188,
