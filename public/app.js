@@ -47,6 +47,7 @@ const State = {
   chatHistory:  [],           // [{role: 'user'|'model', text: '...'}] — riwayat percakapan AI
   selectedRoom:    null,        // null = semua ruangan (dashboard switcher)
   histDevice:      null,        // null = semua ruangan (history filter)
+  analysisRoom:    null,        // null = semua ruangan (analysis filter)
   sensorStatuses:  {},          // device_id → status ('online'|'offline'|'warning'|'never')
 };
 
@@ -359,19 +360,17 @@ function renderSummary(records, range) {
 
 // ── ANALYSIS PAGE ─────────────────────────────────────────────────────────────
 function updateAnalysisPage() {
-  const { latestTemp, latestHum, outdoor } = State;
+  const { outdoor } = State;
+  const deviceParam = State.analysisRoom
+    ? '?device_id=' + encodeURIComponent(State.analysisRoom)
+    : '';
 
-  setText('an-indoor-temp', latestTemp != null ? latestTemp.toFixed(1) + '°C' : '—');
+  // Reset semua nilai indoor ke placeholder
+  setText('an-indoor-temp', '—');
   setText('an-avg-temp', '—'); setText('an-min-temp', '—'); setText('an-max-temp', '—');
+  setText('an-delta-indoor', '—'); setText('an-delta-outdoor', '—'); setText('an-delta-result', '—');
 
-  fetch(CONFIG.API_BASE_URL + '/api/stats')
-    .then(r => r.ok ? r.json() : {})
-    .then(d => {
-      setText('an-avg-temp', d.temp_avg != null ? d.temp_avg + '°C' : '—');
-      setText('an-min-temp', d.temp_min != null ? d.temp_min + '°C' : '—');
-      setText('an-max-temp', d.temp_max != null ? d.temp_max + '°C' : '—');
-    }).catch(() => {});
-
+  // Outdoor selalu pakai State.outdoor (bukan per-ruangan)
   if (outdoor) {
     setText('an-out-temp', outdoor.temperature != null ? outdoor.temperature.toFixed(1) + '°C' : '—');
     setText('an-feels',    outdoor.feels_like  != null ? outdoor.feels_like.toFixed(1)  + '°C' : '—');
@@ -379,32 +378,59 @@ function updateAnalysisPage() {
     setText('an-wind',     outdoor.wind_speed  != null ? outdoor.wind_speed.toFixed(1) + ' m/s': '—');
   }
 
-  setText('an-delta-indoor',  latestTemp != null           ? latestTemp.toFixed(1) + '°C'           : '—');
-  setText('an-delta-outdoor', outdoor?.temperature != null ? outdoor.temperature.toFixed(1) + '°C'   : '—');
+  // Fetch latest untuk ruangan analysis yang dipilih
+  fetch(CONFIG.API_BASE_URL + '/api/latest' + deviceParam)
+    .then(r => (r.status === 404) ? null : r.ok ? r.json() : null)
+    .then(d => {
+      const t = d?.temperature ?? null;
+      const h = d?.humidity    ?? null;
+      setText('an-indoor-temp', t != null ? t.toFixed(1) + '°C' : '—');
 
-  if (latestTemp != null && outdoor?.temperature != null) {
-    const delta = latestTemp - outdoor.temperature;
-    const sign  = delta >= 0 ? '+' : '';
-    setText('an-delta-result', sign + delta.toFixed(1) + '°C');
-    const card = $('an-delta-result-card'), txt = $('an-delta-result');
-    if (card && txt) {
-      if (delta > 3)       { card.style.background = 'var(--coral-soft)';  txt.style.color = 'var(--coral)'; }
-      else if (delta < -3) { card.style.background = 'var(--sky-soft)';    txt.style.color = 'var(--sky)'; }
-      else                 { card.style.background = 'var(--emerald-soft)'; txt.style.color = 'var(--emerald)'; }
-    }
-  }
+      // Delta indoor vs outdoor
+      setText('an-delta-indoor',  t != null                      ? t.toFixed(1) + '°C'                         : '—');
+      setText('an-delta-outdoor', outdoor?.temperature != null   ? outdoor.temperature.toFixed(1) + '°C'        : '—');
+      if (t != null && outdoor?.temperature != null) {
+        const delta = t - outdoor.temperature;
+        const sign  = delta >= 0 ? '+' : '';
+        setText('an-delta-result', sign + delta.toFixed(1) + '°C');
+        const card = $('an-delta-result-card'), txt = $('an-delta-result');
+        if (card && txt) {
+          if (delta > 3)       { card.style.background = 'var(--coral-soft)';  txt.style.color = 'var(--coral)'; }
+          else if (delta < -3) { card.style.background = 'var(--sky-soft)';    txt.style.color = 'var(--sky)'; }
+          else                 { card.style.background = 'var(--emerald-soft)'; txt.style.color = 'var(--emerald)'; }
+        }
+      }
 
-  updateComfort(latestTemp, latestHum, outdoor);
+      // Comfort cards pakai data ruangan yang dipilih
+      updateComfort(t, h, outdoor);
 
-  // Analysis chart overlay
-  if (!chartAnal) initCharts();
-  if (chartAnal && State.chartData.labels.length && outdoor?.temperature != null) {
-    const lbls = State.chartData.labels.map(l => new Date(l));
-    chartAnal.data.labels           = lbls;
-    chartAnal.data.datasets[0].data = State.chartData.temps;
-    chartAnal.data.datasets[1].data = lbls.map(() => outdoor.temperature);
-    chartAnal.update('active');
-  }
+      // Analysis chart — ambil data history 3h untuk ruangan yang dipilih
+      if (!chartAnal) initCharts();
+      if (chartAnal && outdoor?.temperature != null) {
+        const histUrl = CONFIG.API_BASE_URL + '/api/history?range=3h' +
+          (State.analysisRoom ? '&device_id=' + encodeURIComponent(State.analysisRoom) : '');
+        fetch(histUrl)
+          .then(r => r.ok ? r.json() : [])
+          .then(hist => {
+            if (!Array.isArray(hist) || !hist.length) return;
+            const lbls  = hist.map(x => new Date(x.timestamp));
+            const temps = hist.map(x => x.temperature);
+            chartAnal.data.labels           = lbls;
+            chartAnal.data.datasets[0].data = temps;
+            chartAnal.data.datasets[1].data = lbls.map(() => outdoor.temperature);
+            chartAnal.update('active');
+          }).catch(() => {});
+      }
+    }).catch(() => {});
+
+  // Stats (avg / min / max) — filter per ruangan
+  fetch(CONFIG.API_BASE_URL + '/api/stats' + deviceParam)
+    .then(r => r.ok ? r.json() : {})
+    .then(d => {
+      setText('an-avg-temp', d.temp_avg != null ? d.temp_avg + '°C' : '—');
+      setText('an-min-temp', d.temp_min != null ? d.temp_min + '°C' : '—');
+      setText('an-max-temp', d.temp_max != null ? d.temp_max + '°C' : '—');
+    }).catch(() => {});
 }
 
 function updateComfort(temp, hum, outdoor) {
@@ -958,6 +984,7 @@ async function fetchRooms() {
   // Selalu populate UI (baik dari backend maupun fallback lokal)
   _populateRoomSwitcher();
   _populateHistoryFilter();
+  _populateAnalysisFilter();
 }
 
 function _populateRoomSwitcher() {
@@ -993,6 +1020,27 @@ function _populateHistoryFilter() {
     opt.textContent = room.name + ' (' + room.id + ')';
     sel.appendChild(opt);
   });
+}
+
+function _populateAnalysisFilter() {
+  const sel = $('analysis-room-filter');
+  if (!sel) return;
+  // Hapus opsi lama (kecuali "Semua Ruangan")
+  while (sel.options.length > 1) sel.remove(1);
+  ROOM_CONFIG.forEach(room => {
+    const opt = document.createElement('option');
+    opt.value = room.id;
+    opt.textContent = room.name;
+    sel.appendChild(opt);
+  });
+  // Pasang listener sekali
+  if (!sel.dataset.listenerAttached) {
+    sel.dataset.listenerAttached = '1';
+    sel.addEventListener('change', () => {
+      State.analysisRoom = sel.value || null;
+      if (State.currentPage === 'analysis') updateAnalysisPage();
+    });
+  }
 }
 
 function switchRoom(btn, roomId) {
