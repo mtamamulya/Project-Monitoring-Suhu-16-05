@@ -34,17 +34,19 @@ const CONFIG = {
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 const State = {
-  latestTemp:  null,
-  latestHum:   null,
-  outdoor:     null,
-  dashRange:   'live',
-  histRange:   '3h',
-  chartData:   { labels: [], temps: [], hums: [] },
-  historyData: [],
-  isMicActive: false,
-  recognition: null,
-  currentPage: '',        // kosong agar navigateTo('dashboard') tidak terkena guard
-  chatHistory: [],        // [{role: 'user'|'model', text: '...'}] — riwayat percakapan AI
+  latestTemp:   null,
+  latestHum:    null,
+  outdoor:      null,
+  dashRange:    'live',
+  histRange:    '3h',
+  chartData:    { labels: [], temps: [], hums: [] },
+  historyData:  [],
+  isMicActive:  false,
+  recognition:  null,
+  currentPage:  '',           // kosong agar navigateTo('dashboard') tidak terkena guard
+  chatHistory:  [],           // [{role: 'user'|'model', text: '...'}] — riwayat percakapan AI
+  selectedRoom: null,         // null = semua ruangan (dashboard switcher)
+  histDevice:   null,         // null = semua ruangan (history filter)
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -479,7 +481,9 @@ function startClock() {
 /** GET /api/latest → update gauge */
 async function fetchLatest() {
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/latest');
+    const url = CONFIG.API_BASE_URL + '/api/latest' +
+      (State.selectedRoom ? '?device_id=' + encodeURIComponent(State.selectedRoom) : '');
+    const res = await fetch(url);
     if (!res.ok) { console.warn('[Latest] HTTP ' + res.status); return; }
     const d = await res.json();
     if (d.temperature == null) return;
@@ -509,7 +513,9 @@ async function fetchDashChart() {
   const range         = State.dashRange;
   const endpointRange = (range === '6h') ? '12h' : range;
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/history?range=' + endpointRange);
+    let url = CONFIG.API_BASE_URL + '/api/history?range=' + endpointRange;
+    if (State.selectedRoom) url += '&device_id=' + encodeURIComponent(State.selectedRoom);
+    const res = await fetch(url);
     if (!res.ok) { console.warn('[DashChart] HTTP ' + res.status); return; }
     let data = (await res.json()).data || [];
 
@@ -534,7 +540,9 @@ async function fetchAndRenderHistory(range) {
   State.histRange = range;
   const endpointRange = (range === '6h') ? '12h' : range;
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/history?range=' + endpointRange);
+    let url = CONFIG.API_BASE_URL + '/api/history?range=' + endpointRange;
+    if (State.histDevice) url += '&device_id=' + encodeURIComponent(State.histDevice);
+    const res = await fetch(url);
     if (!res.ok) { console.warn('[History] HTTP ' + res.status); return; }
     let data = (await res.json()).data || [];
 
@@ -555,7 +563,9 @@ async function fetchAndRenderHistory(range) {
 /** GET /api/stats */
 async function fetchStats() {
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/stats');
+    const url = CONFIG.API_BASE_URL + '/api/stats' +
+      (State.selectedRoom ? '?device_id=' + encodeURIComponent(State.selectedRoom) : '');
+    const res = await fetch(url);
     if (!res.ok) return;
     updateStats(await res.json());
   } catch (e) {
@@ -767,6 +777,13 @@ function attachListeners() {
       return;
     }
 
+    // 3b. Clear Chat
+    const clearChatBtn = e.target.closest('#btn-clear-chat');
+    if (clearChatBtn) {
+      clearChat();
+      return;
+    }
+
     // 4. Send Chat
     const sendBtn = e.target.closest('#btn-send');
     if (sendBtn) {
@@ -836,10 +853,19 @@ function attachListeners() {
   const chatInput = $('chat-input');
   if (chatInput) {
     chatInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { 
-        e.preventDefault(); 
-        sendChat(); 
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
       }
+    });
+  }
+
+  // History device filter dropdown
+  const histRoomFilter = $('history-room-filter');
+  if (histRoomFilter) {
+    histRoomFilter.addEventListener('change', () => {
+      State.histDevice = histRoomFilter.value || null;
+      fetchAndRenderHistory(State.histRange);
     });
   }
 }
@@ -857,7 +883,75 @@ async function fetchRooms() {
   } catch (e) {
     console.warn('[Rooms] Gagal fetch dari backend, pakai fallback lokal:', e.message);
   }
+  // Selalu populate UI (baik dari backend maupun fallback lokal)
+  _populateRoomSwitcher();
+  _populateHistoryFilter();
 }
+
+function _populateRoomSwitcher() {
+  const container = $('dashboard-room-switcher');
+  if (!container) return;
+  container.innerHTML = '<span class="label" style="margin-right:4px;">Ruangan:</span>';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'seg-btn active';
+  allBtn.dataset.room = '';
+  allBtn.textContent = 'Semua';
+  allBtn.onclick = () => window.switchRoom(allBtn, '');
+  container.appendChild(allBtn);
+
+  ROOM_CONFIG.forEach(room => {
+    const btn = document.createElement('button');
+    btn.className = 'seg-btn';
+    btn.dataset.room = room.id;
+    btn.textContent = room.name;
+    btn.onclick = () => window.switchRoom(btn, room.id);
+    container.appendChild(btn);
+  });
+}
+
+function _populateHistoryFilter() {
+  const sel = $('history-room-filter');
+  if (!sel) return;
+  // Hapus opsi lama (kecuali "Semua Ruangan")
+  while (sel.options.length > 1) sel.remove(1);
+  ROOM_CONFIG.forEach(room => {
+    const opt = document.createElement('option');
+    opt.value = room.id;
+    opt.textContent = room.name + ' (' + room.id + ')';
+    sel.appendChild(opt);
+  });
+}
+
+function switchRoom(btn, roomId) {
+  State.selectedRoom = roomId || null;
+  $$('#dashboard-room-switcher .seg-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Refresh semua data dashboard sesuai ruangan yang dipilih
+  fetchLatest();
+  fetchDashChart();
+  fetchStats();
+}
+window.switchRoom = switchRoom;
+
+function clearChat() {
+  State.chatHistory = [];
+  const wrap = $('chat-messages');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="chat-ai"><p style="color:var(--ink-2);">Good day. I have access to your <strong style="color:var(--ink);">live sensor stream</strong> and Semarang outdoor conditions. Ask me about anomalies, thermal comfort, or ventilation.</p></div>';
+}
+
+function togglePassword() {
+  const passInput  = $('login-pass');
+  const eyeIcon    = $('pass-eye-icon');
+  const eyeOffIcon = $('pass-eyeoff-icon');
+  if (!passInput) return;
+  const isHidden = passInput.type === 'password';
+  passInput.type = isHidden ? 'text' : 'password';
+  if (eyeIcon)    eyeIcon.style.display    = isHidden ? 'none'  : 'block';
+  if (eyeOffIcon) eyeOffIcon.style.display = isHidden ? 'block' : 'none';
+}
+window.togglePassword = togglePassword;
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 async function init() {
@@ -882,19 +976,53 @@ if (document.readyState === 'loading') {
 // dengan benar sebelum Firebase Auth selesai verifikasi user.
 let currentMode = 'publik'; // 'publik' | 'internal'
 
+// ── INACTIVITY AUTO-LOGOUT ────────────────────────────────────
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 menit
+let _inactivityTimer = null;
+
+function _resetInactivityTimer() {
+  clearTimeout(_inactivityTimer);
+  _inactivityTimer = setTimeout(() => {
+    if (currentMode === 'internal' && typeof firebase !== 'undefined' && firebase.auth) {
+      firebase.auth().signOut().then(() => {
+        console.info('[Auth] Auto-logout: tidak aktif selama 30 menit');
+      });
+    }
+  }, INACTIVITY_TIMEOUT_MS);
+}
+
+function _startInactivityTimer() {
+  ['click', 'keydown', 'mousemove', 'touchstart'].forEach(ev => {
+    document.addEventListener(ev, _resetInactivityTimer, { passive: true });
+  });
+  _resetInactivityTimer();
+}
+
+// ── AUTH INIT ─────────────────────────────────────────────────
 function initAuth() {
   try {
     firebase.initializeApp(CONFIG.FIREBASE_CONFIG);
-    firebase.auth().onAuthStateChanged(user => {
-      if (user) {
-        showApp('internal', user);
-      } else {
-        showLogin();
-      }
-    });
+    // SESSION persistence: sesi habis ketika tab/browser ditutup (tidak tersimpan di localStorage)
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+      .then(() => {
+        firebase.auth().onAuthStateChanged(user => {
+          if (user) {
+            showApp('internal', user);
+            _startInactivityTimer();
+          } else {
+            showLogin();
+          }
+        });
+      })
+      .catch(e => {
+        console.warn('[Auth] Gagal set SESSION persistence, fallback ke default:', e.message);
+        firebase.auth().onAuthStateChanged(user => {
+          if (user) { showApp('internal', user); _startInactivityTimer(); }
+          else { showLogin(); }
+        });
+      });
   } catch (e) {
-    console.error("Firebase auth error (cek config):", e);
-    // Fallback if config is dummy
+    console.error('[Auth] Firebase init error:', e);
     showLogin();
   }
 }
@@ -1003,12 +1131,12 @@ async function fetchSensorStatus() {
         }
       }
     });
-    
+
     // Update sensor pill text
     if ($('sensor-pill-text')) {
       $('sensor-pill-text').textContent = `${onlineCount}/${ROOM_CONFIG.length} Sensor Online`;
     }
-    
+
     // Toggle sensor pill offline/online styling
     const sensorPill = $('header-sensor-pill');
     if (sensorPill) {
@@ -1018,7 +1146,7 @@ async function fetchSensorStatus() {
         sensorPill.classList.remove('sensor-offline');
       }
     }
-    
+
     // Dashboard disconnect banner
     const dashBanner = $('dashboard-disconnect-banner');
     if (dashBanner) {
@@ -1036,155 +1164,16 @@ async function fetchSensorStatus() {
         dashBanner.classList.remove('show');
       }
     }
-    
+
     // Bangsal offline warning banner
     if (hasOffline && $('offline-warning-banner')) {
       $('offline-warning-banner').style.display = 'flex';
     } else if ($('offline-warning-banner')) {
       $('offline-warning-banner').style.display = 'none';
     }
-    
+
     return data;
   } catch (e) {
-    console.error(e);
+    console.warn('[SensorStatus]', e.message);
   }
-}
-
-// ─── BANGSAL LOGIC ───────────────────────────────────────────
-async function fetchBangsal() {
-  if (currentMode === 'publik') return;
-  const statusData = await fetchSensorStatus() || [];
-  
-  // also fetch history to get latest values for all rooms
-  // the app.js already fetches history, we can just use the endpoint
-  let history = [];
-  try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/history?range=1h');
-    const hData = await res.json();
-    history = hData.data || [];
-  } catch (e) {}
-
-  const grid = $('bangsal-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  
-  ROOM_CONFIG.forEach(room => {
-    // get room status
-    const s = statusData.find(d => d.device_id === room.id);
-    const status = s ? s.status : 'never';
-    const lastSeen = s ? s.last_seen : null;
-    
-    // get latest history for this room
-    const roomHistory = history.filter(d => d.device_id === room.id);
-    const latest = roomHistory.length > 0 ? roomHistory[roomHistory.length - 1] : null;
-    
-    let temp = '--', hum = '--';
-    let badgeText = 'OFFLINE', badgeClass = 'bg-gray-200 text-gray-700';
-    let overlay = status === 'offline' ? 'opacity: 0.6; filter: grayscale(1);' : '';
-    
-    if (status !== 'offline' && status !== 'never' && latest) {
-      temp = latest.temperature;
-      hum = latest.humidity;
-      
-      const dTemp = Math.max(0, temp - room.tempMax, room.tempMin - temp);
-      const dHum = Math.max(0, hum - room.humMax, room.humMin - hum);
-      
-      if (dTemp > 2 || dHum > 10) {
-        badgeText = 'CRITICAL';
-        badgeClass = 'bg-red-100 text-red-700 border-red-300 badge-critical';
-      } else if (dTemp > 0 || dHum > 0) {
-        badgeText = 'WARNING';
-        badgeClass = 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      } else {
-        badgeText = 'NORMAL';
-        badgeClass = 'bg-green-100 text-green-700 border-green-300';
-      }
-    }
-    
-    const card = document.createElement('div');
-    card.className = 'card-elev p-5 flex flex-col gap-3 relative';
-    card.style = overlay;
-    card.innerHTML = `
-      <div class="flex justify-between items-start">
-        <div>
-          <h3 class="font-semibold text-ink">${room.name}</h3>
-          <p class="text-xs text-muted-2">${room.floor} | ${room.id}</p>
-        </div>
-        <span class="badge ${badgeClass} text-xs px-2 py-1">${badgeText}</span>
-      </div>
-      <div class="flex justify-between items-end mt-2">
-        <div>
-          <div class="text-3xl font-bold text-ink">${temp}°C</div>
-          <div class="text-sm font-medium text-muted">Hum: ${hum}%</div>
-        </div>
-      </div>
-      <div class="text-xs text-muted mt-2 border-t border-gray-100 pt-2">
-        Update: ${lastSeen || 'Belum ada data'}
-      </div>
-    `;
-    grid.appendChild(card);
-  });
-}
-
-// ─── COMPLIANCE LOGIC ────────────────────────────────────────
-let compChart = null;
-
-if ($('btn-load-compliance')) {
-  $('btn-load-compliance').addEventListener('click', async () => {
-    const devId = $('compliance-room').value;
-    const dateStr = $('compliance-date').value;
-    if (!dateStr) return alert("Pilih tanggal!");
-    
-    try {
-      const res = await fetch(`${CONFIG.API_BASE_URL}/api/compliance?device_id=${devId}&date=${dateStr}`);
-      const data = await res.json();
-      
-      $('compliance-result').style.display = 'block';
-      $('compliance-score-text').textContent = data.compliance_score + '%';
-      
-      let color = 'oklch(0.60 0.13 155)'; // green
-      if (data.compliance_score < 80) color = 'oklch(0.58 0.20 28)'; // red
-      else if (data.compliance_score < 95) color = 'oklch(0.74 0.13 75)'; // yellow
-      
-      if (compChart) compChart.destroy();
-      const ctx = $('complianceChart').getContext('2d');
-      compChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: ['Sesuai Standar', 'Deviasi'],
-          datasets: [{
-            data: [data.compliance_score, 100 - data.compliance_score],
-            backgroundColor: [color, 'rgba(0,0,0,0.05)'],
-            borderWidth: 0,
-            cutout: '75%'
-          }]
-        },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-      });
-      
-      let totalDevMins = 0;
-      let tbody = $('compliance-table-body');
-      tbody.innerHTML = '';
-      
-      data.deviations.forEach(d => {
-        totalDevMins += d.duration_minutes;
-        tbody.innerHTML += `
-          <tr style="border-bottom: 1px solid var(--hair);">
-            <td style="padding: 8px;">${d.start}</td>
-            <td style="padding: 8px;">${d.duration_minutes} m</td>
-            <td style="padding: 8px;">${d.type}</td>
-            <td style="padding: 8px;">${d.max_value}</td>
-            <td style="padding: 8px;">${d.threshold}</td>
-          </tr>
-        `;
-      });
-      
-      $('comp-total-dev').textContent = totalDevMins + ' menit';
-      $('comp-incidents').textContent = data.deviations.length;
-      
-    } catch (e) {
-      console.error(e);
-      alert("Gagal load compliance");
-    }
-  });
 }

@@ -424,6 +424,8 @@
       bottom: 88px; right: 24px;
       z-index: 199;
       width: min(380px, calc(100vw - 48px));
+      /* max-height mencegah panel memanjang tak terbatas dan mendorong tombol close keluar layar */
+      max-height: min(520px, calc(100vh - 140px));
       background: var(--card);
       border: 1px solid var(--hair);
       border-radius: 18px;
@@ -460,7 +462,7 @@
 
     #chat-messages {
       flex: 1;
-      height: 300px;
+      min-height: 150px;
       overflow-y: auto;
       padding: 16px;
       display: flex;
@@ -695,7 +697,20 @@
         </div>
         <div style="margin-bottom: 24px;">
           <label class="label" style="display: block; margin-bottom: 6px;">Password</label>
-          <input type="password" id="login-pass" class="input" placeholder="••••••••" required />
+          <div style="position: relative;">
+            <input type="password" id="login-pass" class="input" placeholder="••••••••" required style="padding-right: 42px;" />
+            <button type="button" id="btn-toggle-pass" onclick="window.togglePassword()" title="Tampilkan/sembunyikan password" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 4px;">
+              <!-- eye icon (default: visible / pass hidden) -->
+              <svg id="pass-eye-icon" style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              <!-- eye-off icon (shown when password is visible) -->
+              <svg id="pass-eyeoff-icon" style="width:16px;height:16px;display:none;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div id="login-error" style="color: var(--crit); font-size: 13px; font-weight: 500; margin-bottom: 16px; display: none;"></div>
         
@@ -855,6 +870,13 @@
               <div class="disconnect-title">⚠ Sensor Terputus — Tidak ada data masuk</div>
               <div class="disconnect-sub" id="disconnect-last-time">Menunggu koneksi sensor ESP32…</div>
             </div>
+          </div>
+
+          <!-- Room Switcher -->
+          <div id="dashboard-room-switcher" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+            <!-- Populated by app.js after ROOM_CONFIG is fetched -->
+            <span class="label" style="margin-right: 4px;">Ruangan:</span>
+            <button class="seg-btn active" data-room="" onclick="window.switchRoom(this, '')">Semua</button>
           </div>
 
           <!-- Bento grid -->
@@ -1072,6 +1094,10 @@
               <p class="text-muted" style="font-size: 13px; margin-top: 4px;">Sensor readings from your selected time window</p>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <select id="history-room-filter" class="input" style="font-size: 13px; padding: 6px 10px; min-width: 160px; height: auto;">
+                <option value="">Semua Ruangan</option>
+                <!-- Options diisi oleh app.js setelah ROOM_CONFIG di-fetch -->
+              </select>
               <div class="seg" id="history-seg">
                 <button class="seg-btn active" data-range="3h">3h</button>
                 <button class="seg-btn" data-range="6h">6h</button>
@@ -1385,7 +1411,10 @@
         <span class="dot hb-dot" style="width: 5px; height: 5px;"></span>
         <span>Online</span>
       </div>
-      <button id="chat-close-btn" class="btn-icon" style="width: 30px; height: 30px; margin-left: 4px;" aria-label="Close chat">
+      <button id="btn-clear-chat" class="btn-icon" style="width: 30px; height: 30px;" title="Hapus riwayat chat" aria-label="Clear chat">
+        <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      </button>
+      <button id="chat-close-btn" class="btn-icon" style="width: 30px; height: 30px; margin-left: 2px;" aria-label="Close chat">
         <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>

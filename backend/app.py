@@ -327,11 +327,20 @@ def sensor_status():
 # ── 5. History ────────────────────────────────────────────────
 @app.route("/api/history", methods=["GET"])
 def history():
-    """100% from memory — 0 Firestore reads."""
+    """
+    100% from memory — 0 Firestore reads.
+    Query params:
+      range     : live | 1h | 3h | 12h | 24h  (default: 1h)
+      device_id : opsional — filter ke satu ruangan saja
+    """
     range_param   = request.args.get("range", "1h")
+    device_id     = request.args.get("device_id") or None
     range_minutes = {"live": 15, "1h": 60, "3h": 180, "12h": 720, "24h": 1440}.get(range_param, 60)
     cutoff        = datetime.now(timezone.utc) - timedelta(minutes=range_minutes)
     records       = get_buffer_since(cutoff)
+
+    if device_id:
+        records = [r for r in records if r.get("device_id") == device_id]
 
     result = [{
         "temperature": r["temperature"],
@@ -346,9 +355,17 @@ def history():
 # ── 6. Stats ──────────────────────────────────────────────────
 @app.route("/api/stats", methods=["GET"])
 def stats():
-    """100% from memory — 0 Firestore reads."""
+    """
+    100% from memory — 0 Firestore reads.
+    Query params:
+      device_id : opsional — filter stats ke satu ruangan saja
+    """
+    device_id   = request.args.get("device_id") or None
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     records     = get_buffer_since(today_start)
+
+    if device_id:
+        records = [r for r in records if r.get("device_id") == device_id]
 
     if not records:
         return jsonify({"count": 0})
