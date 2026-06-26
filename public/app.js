@@ -45,8 +45,9 @@ const State = {
   recognition:  null,
   currentPage:  '',           // kosong agar navigateTo('dashboard') tidak terkena guard
   chatHistory:  [],           // [{role: 'user'|'model', text: '...'}] — riwayat percakapan AI
-  selectedRoom: null,         // null = semua ruangan (dashboard switcher)
-  histDevice:   null,         // null = semua ruangan (history filter)
+  selectedRoom:    null,        // null = semua ruangan (dashboard switcher)
+  histDevice:      null,        // null = semua ruangan (history filter)
+  sensorStatuses:  {},          // device_id → status ('online'|'offline'|'warning'|'never')
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -143,6 +144,68 @@ function updateStats(d) {
   setText('stat-max',   d.temp_max != null ? d.temp_max + '°C' : '—');
   setText('stat-avg',   d.temp_avg != null ? d.temp_avg + '°C' : '—');
   setText('stat-count', d.count    != null ? d.count.toLocaleString() : '—');
+}
+
+// ── GAUGE RESET & STALE INDICATOR ────────────────────────────────────────────
+
+/**
+ * Reset semua gauge, badge, comparison ke "—".
+ * Dipanggil saat: pindah ke ruangan yang tidak ada data (404) atau switchRoom().
+ */
+function resetGauges() {
+  // Reset temperature gauge arc + value
+  const tempArc = $('gauge-temp-arc');
+  if (tempArc) tempArc.style.strokeDashoffset = CONFIG.GAUGE_ARC;
+  setText('gauge-temp-value', '—');
+
+  // Reset humidity gauge arc + value
+  const humArc = $('gauge-hum-arc');
+  if (humArc) humArc.style.strokeDashoffset = CONFIG.GAUGE_ARC;
+  setText('gauge-hum-value', '—');
+
+  // Reset badges
+  const bTemp = $('badge-temp');
+  if (bTemp) { bTemp.textContent = '—'; bTemp.className = 'badge tabular'; bTemp.removeAttribute('style'); }
+  const bHum = $('badge-hum');
+  if (bHum) { bHum.textContent = '—'; bHum.className = 'badge tabular'; bHum.removeAttribute('style'); }
+
+  // Reset compare widget
+  setText('compare-indoor-temp', '—');
+  setText('compare-indoor-hum',  '—');
+
+  // Reset State
+  State.latestTemp = null;
+  State.latestHum  = null;
+
+  // Sembunyikan stale banner
+  _setGaugeStaleBanner(false);
+}
+
+/**
+ * Tampilkan/sembunyikan banner peringatan data stale di atas bento-grid.
+ * Dipakai ketika sensor offline tapi buffer masih punya data terakhirnya.
+ * @param {boolean} show
+ * @param {string}  [statusLabel] - misal 'Offline' atau 'Lambat'
+ */
+function _setGaugeStaleBanner(show, statusLabel) {
+  let el = $('gauge-stale-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'gauge-stale-banner';
+    el.style.cssText = 'display:none; align-items:center; gap:8px; padding:8px 14px; '
+      + 'background:var(--amber-soft); color:var(--amber); '
+      + 'border:1px solid var(--amber); border-radius:8px; '
+      + 'font-size:12.5px; font-weight:600; margin-bottom:12px;';
+    const switcher = $('dashboard-room-switcher');
+    if (switcher && switcher.parentNode) switcher.parentNode.insertBefore(el, switcher.nextSibling);
+  }
+  if (show && statusLabel) {
+    el.innerHTML = `<svg style="width:14px;height:14px;flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>`
+      + ` Sensor <strong style="margin:0 2px;">${statusLabel}</strong> — menampilkan data terakhir sebelum koneksi terputus`;
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
 }
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
@@ -478,8 +541,8 @@ async function fetchLatest() {
     const url = CONFIG.API_BASE_URL + '/api/latest' +
       (State.selectedRoom ? '?device_id=' + encodeURIComponent(State.selectedRoom) : '');
     const res = await fetch(url);
-    // 404 berarti device belum ada data (normal saat sensor offline) — tidak perlu log error
-    if (res.status === 404) return;
+    // 404 = device belum pernah kirim data → reset gauge ke "—" agar tidak tampilkan data ruangan lain
+    if (res.status === 404) { resetGauges(); return; }
     if (!res.ok) { console.warn('[Latest] HTTP ' + res.status); return; }
     const d = await res.json();
     if (d.temperature == null) return;
@@ -493,8 +556,21 @@ async function fetchLatest() {
     setBadge('badge-hum',  humBadge(d.humidity));
 
     if (State.outdoor) updateCompare(d.temperature, d.humidity, State.outdoor);
-
     setText('last-updated', new Date().toLocaleTimeString('en-GB', { hour12: false }));
+
+    // ── Tampilkan banner jika sensor sedang offline tapi buffer masih punya data lama ──
+    if (State.selectedRoom) {
+      const st = State.sensorStatuses[State.selectedRoom];
+      if (st === 'offline') {
+        _setGaugeStaleBanner(true, 'Offline');
+      } else if (st === 'warning') {
+        _setGaugeStaleBanner(true, 'Lambat / Tidak Stabil');
+      } else {
+        _setGaugeStaleBanner(false);
+      }
+    } else {
+      _setGaugeStaleBanner(false);
+    }
   } catch (e) {
     console.warn('[Latest]', e.message);
   }
@@ -923,7 +999,8 @@ function switchRoom(btn, roomId) {
   State.selectedRoom = roomId || null;
   $$('#dashboard-room-switcher .seg-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  // Refresh semua data dashboard sesuai ruangan yang dipilih
+  // Reset gauge ke "—" seketika agar tidak tampilkan data sisa ruangan sebelumnya
+  resetGauges();
   fetchLatest();
   fetchDashChart();
   fetchStats();
@@ -1113,7 +1190,10 @@ async function fetchSensorStatus() {
     let allOffline = true;
     let lastSeenAny = null;
     
+    // Simpan status tiap sensor ke State agar fungsi lain bisa baca
+    State.sensorStatuses = {};
     data.forEach(s => {
+      if (s.device_id) State.sensorStatuses[s.device_id] = s.status;
       if (!s.unknown) {
         if (s.status === 'online' || s.status === 'warning') {
           onlineCount++;
@@ -1169,6 +1249,18 @@ async function fetchSensorStatus() {
 
     // Render room status grid di dashboard
     renderRoomGrid(data);
+
+    // ── Refresh stale banner sesuai status sensor terpilih saat ini ──
+    if (State.selectedRoom && State.latestTemp != null) {
+      const st = State.sensorStatuses[State.selectedRoom];
+      if (st === 'offline') {
+        _setGaugeStaleBanner(true, 'Offline');
+      } else if (st === 'warning') {
+        _setGaugeStaleBanner(true, 'Lambat / Tidak Stabil');
+      } else {
+        _setGaugeStaleBanner(false);
+      }
+    }
 
     return data;
   } catch (e) {
