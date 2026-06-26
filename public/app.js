@@ -66,12 +66,6 @@ function navigateTo(page) {
   const pageEl = $('page-' + page);
   if (pageEl) pageEl.classList.add('active');
 
-  // Handle Bangsal Logic
-  if (page === 'bangsal') {
-    fetchBangsal();
-  }
-
-
   $$('.nav-item[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   $$('.bnav-item[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === page));
 
@@ -484,6 +478,8 @@ async function fetchLatest() {
     const url = CONFIG.API_BASE_URL + '/api/latest' +
       (State.selectedRoom ? '?device_id=' + encodeURIComponent(State.selectedRoom) : '');
     const res = await fetch(url);
+    // 404 berarti device belum ada data (normal saat sensor offline) — tidak perlu log error
+    if (res.status === 404) return;
     if (!res.ok) { console.warn('[Latest] HTTP ' + res.status); return; }
     const d = await res.json();
     if (d.temperature == null) return;
@@ -1165,15 +1161,107 @@ async function fetchSensorStatus() {
       }
     }
 
-    // Bangsal offline warning banner
-    if (hasOffline && $('offline-warning-banner')) {
-      $('offline-warning-banner').style.display = 'flex';
-    } else if ($('offline-warning-banner')) {
-      $('offline-warning-banner').style.display = 'none';
+    // Offline warning badge (di header Status Semua Ruangan)
+    const offlineBanner = $('offline-warning-banner');
+    if (offlineBanner) {
+      offlineBanner.style.display = hasOffline ? 'flex' : 'none';
     }
+
+    // Render room status grid di dashboard
+    renderRoomGrid(data);
 
     return data;
   } catch (e) {
     console.warn('[SensorStatus]', e.message);
   }
+}
+// ── ROOM STATUS GRID ──────────────────────────────────────────
+function renderRoomGrid(sensorData) {
+  const grid = $('room-status-grid');
+  if (!grid) return;
+
+  // Map sensor data ke device_id agar mudah di-lookup
+  const byDevice = {};
+  sensorData.forEach(s => { byDevice[s.device_id] = s; });
+
+  grid.innerHTML = ROOM_CONFIG.map(room => {
+    const s    = byDevice[room.id] || {};
+    const temp = s.temperature != null ? s.temperature : null;
+    const hum  = s.humidity    != null ? s.humidity    : null;
+    const status = s.status || 'never';
+
+    // ── Status connectivity ──
+    const connMap = {
+      online:  { label: '● Online',         color: 'var(--emerald)' },
+      warning: { label: '◔ Lambat',         color: 'var(--amber)'   },
+      offline: { label: '○ Offline',        color: 'var(--crit)'    },
+      never:   { label: '— Belum ada data', color: 'var(--muted)'   },
+    };
+    const conn = connMap[status] || connMap.never;
+
+    // ── Ambil threshold (dari server atau fallback ROOM_CONFIG) ──
+    const tempMin = s.tempMin != null ? s.tempMin : room.tempMin;
+    const tempMax = s.tempMax != null ? s.tempMax : room.tempMax;
+    const humMin  = s.humMin  != null ? s.humMin  : room.humMin;
+    const humMax  = s.humMax  != null ? s.humMax  : room.humMax;
+
+    // ── Klasifikasi kesehatan ruangan ──
+    let cardClass = 'room-status-card';
+    let healthLabel = '✓ Normal';
+    let healthColor = 'var(--emerald)';
+
+    if (status === 'offline' || status === 'never') {
+      cardClass += ' room-offline';
+      healthLabel = '— Tidak ada data';
+      healthColor = 'var(--muted)';
+    } else if (temp != null) {
+      const tempBad = temp < tempMin - 2 || temp > tempMax + 2;
+      const humBad  = hum != null && (hum < humMin - 10 || hum > humMax + 10);
+      const tempWarn = temp < tempMin || temp > tempMax;
+      const humWarn  = hum != null && (hum < humMin || hum > humMax);
+
+      if (tempBad || humBad) {
+        cardClass += ' room-critical';
+        healthLabel = '⚠ Kritis';
+        healthColor = 'var(--crit)';
+      } else if (tempWarn || humWarn) {
+        cardClass += ' room-warning';
+        healthLabel = '⚡ Perhatian';
+        healthColor = 'var(--amber)';
+      }
+    }
+
+    // ── Warna nilai per threshold ──
+    const tempColor = temp == null ? 'var(--muted)'
+      : (temp < tempMin || temp > tempMax) ? 'var(--coral)' : 'var(--emerald)';
+    const humColor = hum == null ? 'var(--muted)'
+      : (hum < humMin || hum > humMax) ? 'var(--sky)' : 'var(--emerald)';
+
+    const tempStr = temp != null ? temp.toFixed(1) + '°C' : '—';
+    const humStr  = hum  != null ? hum.toFixed(1)  + '%'  : '—';
+    const floor   = s.floor || room.floor || '';
+
+    return `<div class="${cardClass}">
+        <div class="room-card-header">
+          <span class="room-card-name">${room.name}</span>
+          ${floor ? `<span class="room-card-floor">${floor}</span>` : ''}
+        </div>
+        <div class="room-card-readings">
+          <div class="room-reading">
+            <div class="room-reading-label">Suhu</div>
+            <div class="room-reading-value" style="color:${tempColor};">${tempStr}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px;">${tempMin}–${tempMax}°C</div>
+          </div>
+          <div class="room-reading">
+            <div class="room-reading-label">Kelembaban</div>
+            <div class="room-reading-value" style="color:${humColor};">${humStr}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px;">${humMin}–${humMax}%</div>
+          </div>
+        </div>
+        <div class="room-card-footer">
+          <span style="font-size:12px;font-weight:600;color:${healthColor};">${healthLabel}</span>
+          <span style="font-size:11px;font-weight:500;color:${conn.color};">${conn.label}</span>
+        </div>
+      </div>`;
+  }).join('');
 }

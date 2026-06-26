@@ -83,7 +83,7 @@ byte iconDegree[8] = {
 #define API_ENDPOINT     "https://climateos-backend.onrender.com/api/telemetry"
 
 // ID unik untuk perangkat ini (bebas diisi apa saja)
-#define DEVICE_ID        "NICU-01"
+#define DEVICE_ID        "BANGSAL-A"
 
 // Pin dan tipe sensor
 #define DHT_PIN          4

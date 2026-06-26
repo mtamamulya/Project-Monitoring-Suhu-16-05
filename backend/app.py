@@ -302,10 +302,17 @@ def sensor_status():
             status = "online" if diff < 300 else "warning" if diff <= 600 else "offline"
 
         results.append({
-            "device_id": device_id,
-            "room_name": room["name"],
-            "last_seen": _serialize_ts(last_seen),
-            "status":    status,
+            "device_id":   device_id,
+            "room_name":   room["name"],
+            "floor":       room.get("floor", ""),
+            "last_seen":   _serialize_ts(last_seen),
+            "status":      status,
+            "temperature": record["temperature"] if record else None,
+            "humidity":    record["humidity"]    if record else None,
+            "tempMin":     room["tempMin"],
+            "tempMax":     room["tempMax"],
+            "humMin":      room["humMin"],
+            "humMax":      room["humMax"],
         })
 
     # Device yang ada di buffer tapi tidak terdaftar di ROOM_CONFIG
