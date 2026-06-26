@@ -662,6 +662,9 @@
       .outdoor-sub-grid { grid-template-columns: 1fr 1fr 1fr !important; }
       .hero-info { flex-direction: column; }
       .hero-info .card-flat { width: 100%; }
+      #history-summary-row { grid-template-columns: 1fr 1fr !important; }
+      #dashboard-room-switcher { gap: 6px; }
+      .room-card-readings { grid-template-columns: 1fr 1fr; }
     }
 
     @media (max-width: 480px) {
@@ -669,6 +672,13 @@
       .stats-grid { grid-template-columns: 1fr 1fr !important; }
       .compare-col-delta { display: none; }
       .chat-panel { width: calc(100vw - 24px); right: 12px; }
+      #history-summary-row { grid-template-columns: 1fr 1fr !important; }
+      #dashboard-room-switcher .seg-btn { font-size: 11px; padding: 5px 8px; }
+      #dashboard-room-switcher .label { font-size: 11px; }
+      .room-status-card { padding: 12px; }
+      .room-reading-value { font-size: 17px !important; }
+      #history-room-filter { min-width: 130px !important; }
+      .top-header .text-muted-2 { display: none; }
     }
 
     /* ── Room Status Cards ── */
@@ -1106,7 +1116,6 @@
               </div>
             </div>
           </div>
-        </div>
 
           <!-- ══ STATUS SEMUA RUANGAN ══ -->
           <div style="margin-top: 20px;">
