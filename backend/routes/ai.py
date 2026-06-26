@@ -1,8 +1,11 @@
 """
 routes/ai.py
 Context-injected Gemini 2.5 Flash chat endpoint.
-Queries last 50 telemetry records + today's stats and injects them
-as a hidden system prompt before forwarding the user message.
+
+Perubahan dari versi sebelumnya:
+- Import buffer dari services/buffer.py (bukan dari app.py) → tidak ada circular import
+- handle_chat() sekarang terima parameter history untuk multi-turn conversation
+- Pakai model.start_chat(history=...) agar AI ingat konteks percakapan sebelumnya
 """
 
 import logging
@@ -11,96 +14,93 @@ from typing import Any
 import google.generativeai as genai
 from firebase_admin import firestore
 
+from services.buffer import get_buffer_since, get_buffer_snapshot
+
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL   = "gemini-2.5-flash"
 LAST_N_RECORDS = 50
-WIB = timezone(timedelta(hours=7))  # Waktu Indonesia Barat (UTC+7)
+WIB            = timezone(timedelta(hours=7))  # UTC+7
 
 
 def _fetch_context_data() -> dict[str, Any]:
     """
-    Build structured analytical context from in-memory buffer.
-    Uses 0 Firestore reads — all data comes from app.py's memory buffer.
-    Only outdoor weather still reads from Firestore (cached by weather service).
+    Build structured analytical context dari in-memory buffer.
+    0 Firestore reads — semua data dari services/buffer.py.
+    Hanya outdoor weather yang masih baca Firestore (sudah di-cache 10 menit).
     """
-    from app import _get_buffer_since, _telemetry_buffer, _buffer_lock
-
-    now = datetime.now(timezone.utc)
+    now         = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # Last N records from memory (newest first)
-    with _buffer_lock:
-        records = list(reversed(_telemetry_buffer[-LAST_N_RECORDS:]))
+    # Ambil snapshot buffer, ambil N record terbaru (newest first)
+    snapshot = get_buffer_snapshot()
+    records  = list(reversed(snapshot[-LAST_N_RECORDS:]))
 
-    # Today's records from memory
-    today_records = _get_buffer_since(today_start)
-
+    # Stats hari ini
+    today_records = get_buffer_since(today_start)
     stats = {}
     if today_records:
-        temps = [r["temperature"] for r in today_records if r.get("temperature") is not None]
-        humids = [r["humidity"] for r in today_records if r.get("humidity") is not None]
-        stats = {
-            "count": len(today_records),
-            "temp_min": round(min(temps), 2) if temps else None,
-            "temp_max": round(max(temps), 2) if temps else None,
-            "temp_avg": round(sum(temps) / len(temps), 2) if temps else None,
-            "humidity_min": round(min(humids), 2) if humids else None,
-            "humidity_max": round(max(humids), 2) if humids else None,
-            "humidity_avg": round(sum(humids) / len(humids), 2) if humids else None,
+        temps  = [r["temperature"] for r in today_records if r.get("temperature") is not None]
+        humids = [r["humidity"]    for r in today_records if r.get("humidity")    is not None]
+        stats  = {
+            "count":        len(today_records),
+            "temp_min":     round(min(temps),              2) if temps  else None,
+            "temp_max":     round(max(temps),              2) if temps  else None,
+            "temp_avg":     round(sum(temps) / len(temps), 2) if temps  else None,
+            "humidity_min": round(min(humids),             2) if humids else None,
+            "humidity_max": round(max(humids),             2) if humids else None,
+            "humidity_avg": round(sum(humids)/len(humids), 2) if humids else None,
         }
 
-    # Outdoor weather cache (still from Firestore, but cached by weather service)
+    # Outdoor weather dari Firestore cache (10 menit TTL, ~144 reads/hari)
     outdoor = {}
     try:
-        db = firestore.client()
+        db          = firestore.client()
         outdoor_doc = db.collection("_system").document("weather_cache").get()
-        outdoor = outdoor_doc.to_dict() if outdoor_doc.exists else {}
+        outdoor     = outdoor_doc.to_dict() if outdoor_doc.exists else {}
     except Exception:
         pass
 
     return {
-        "recent_records": records,
-        "today_stats": stats,
-        "outdoor_weather": outdoor,
+        "recent_records":       records,
+        "today_stats":          stats,
+        "outdoor_weather":      outdoor,
         "context_generated_at": datetime.now(WIB).strftime("%Y-%m-%d %H:%M:%S WIB"),
     }
 
 
 def _format_ts_wib(ts) -> str:
-    """Convert a Firestore timestamp to WIB string."""
     if ts is None:
         return "N/A"
-    if hasattr(ts, 'astimezone'):
+    if hasattr(ts, "astimezone"):
         return ts.astimezone(WIB).strftime("%H:%M:%S WIB")
     return str(ts)
 
 
 def _build_system_prompt(context: dict[str, Any]) -> str:
-    stats = context.get("today_stats", {})
+    stats   = context.get("today_stats", {})
     outdoor = context.get("outdoor_weather", {})
     records = context.get("recent_records", [])
 
-    # Calculate indoor vs outdoor delta if both are available
     delta_str = "N/A"
     if stats.get("temp_avg") is not None and outdoor.get("temperature") is not None:
-        delta = round(stats["temp_avg"] - outdoor["temperature"], 2)
+        delta     = round(stats["temp_avg"] - outdoor["temperature"], 2)
         delta_str = f"{'+' if delta >= 0 else ''}{delta}°C"
 
     recent_summary = ""
     if records:
         latest = records[0]
-        ts = latest.get('timestamp', None)
-        ts_str = 'N/A'
-        if ts is not None:
-            if hasattr(ts, 'astimezone'):
-                ts_str = ts.astimezone(WIB).strftime("%H:%M:%S WIB")
-            else:
-                ts_str = str(ts)
+        ts_str = _format_ts_wib(latest.get("timestamp"))
         recent_summary = (
             f"Most recent reading: {latest.get('temperature', 'N/A')}°C / "
             f"{latest.get('humidity', 'N/A')}% at {ts_str}"
         )
+
+    recent_lines = "\n".join(
+        f"  [{_format_ts_wib(r.get('timestamp'))}] {r.get('device_id', '?')}: "
+        f"{r.get('temperature', '?')}°C / {r.get('humidity', '?')}%"
+        for r in records[:10]
+    )
 
     return f"""Kamu adalah asisten klinis AI untuk sistem monitoring iklim MediClimate RS di rumah sakit. Kamu memiliki akses ke data sensor real-time dari bangsal anak dan neonatal.
 
@@ -138,10 +138,7 @@ INDOOR vs OUTDOOR DELTA (ΔT):
   ΔT = {delta_str}
 
 LAST {len(records)} READINGS (newest first, times in WIB/UTC+7):
-{chr(10).join(
-    f"  [{_format_ts_wib(r.get('timestamp'))}] {r.get('device_id', '?')}: {r.get('temperature', '?')}°C / {r.get('humidity', '?')}%"
-    for r in records[:10]
-)}
+{recent_lines}
 --- END CONTEXT ---
 
 IMPORTANT: All timestamps above are in WIB (Waktu Indonesia Barat, UTC+7). Always refer to times in WIB when responding.
@@ -157,10 +154,15 @@ CARA KAMU MERESPONS:
 """
 
 
-def handle_chat(user_message: str, gemini_api_key: str) -> str:
+def handle_chat(user_message: str, gemini_api_key: str, history: list = None) -> str:
     """
-    Process a user chat message by injecting live sensor context as system
-    prompt and forwarding to Gemini 2.5 Flash. Returns the AI response text.
+    Proses pesan user dengan context sensor real-time sebagai system prompt.
+
+    Parameters:
+        user_message   : Pesan terbaru dari user
+        gemini_api_key : API key Gemini
+        history        : List riwayat percakapan [{role: 'user'|'model', text: '...'}]
+                         Dikirim dari frontend untuk multi-turn conversation.
     """
     if not user_message or not user_message.strip():
         return "Please provide a message."
@@ -175,12 +177,22 @@ def handle_chat(user_message: str, gemini_api_key: str) -> str:
 
     system_prompt = _build_system_prompt(context)
 
+    # Format history ke format Gemini: [{role, parts: [text]}]
+    formatted_history = []
+    if history:
+        for msg in history:
+            role = "user" if msg.get("role") == "user" else "model"
+            text = msg.get("text", "").strip()
+            if text:
+                formatted_history.append({"role": role, "parts": [text]})
+
     try:
         model = genai.GenerativeModel(
             model_name=GEMINI_MODEL,
             system_instruction=system_prompt,
         )
-        response = model.generate_content(user_message)
+        chat_session = model.start_chat(history=formatted_history)
+        response     = chat_session.send_message(user_message)
         return response.text
     except Exception as exc:
         logger.error("Gemini API error: %s", exc)

@@ -6,10 +6,10 @@ from datetime import datetime, timezone, timedelta
 logger = logging.getLogger(__name__)
 
 ROOM_CONFIG = {
-    "NICU-01":    {"name": "NICU",              "tempMin": 24.0, "tempMax": 26.0, "humMin": 50.0, "humMax": 60.0},
-    "BANGSAL-A":  {"name": "Bangsal Bayi",      "tempMin": 22.0, "tempMax": 26.0, "humMin": 45.0, "humMax": 60.0},
-    "BANGSAL-B":  {"name": "Bangsal Anak Umum", "tempMin": 20.0, "tempMax": 24.0, "humMin": 40.0, "humMax": 60.0},
-    "ISOLASI-01": {"name": "Ruang Isolasi",     "tempMin": 22.0, "tempMax": 25.0, "humMin": 45.0, "humMax": 55.0},
+    "NICU-01":    {"name": "NICU",              "floor": "Lt. 2", "tempMin": 24.0, "tempMax": 26.0, "humMin": 50.0, "humMax": 60.0},
+    "BANGSAL-A":  {"name": "Bangsal Bayi",      "floor": "Lt. 2", "tempMin": 22.0, "tempMax": 26.0, "humMin": 45.0, "humMax": 60.0},
+    "BANGSAL-B":  {"name": "Bangsal Anak Umum", "floor": "Lt. 3", "tempMin": 20.0, "tempMax": 24.0, "humMin": 40.0, "humMax": 60.0},
+    "ISOLASI-01": {"name": "Ruang Isolasi",     "floor": "Lt. 3", "tempMin": 22.0, "tempMax": 25.0, "humMin": 45.0, "humMax": 55.0},
 }
 
 _alert_states = {}

@@ -1,13 +1,15 @@
 /**
- * app.js — MediClimate RS Dashboard v2.1 (FIXED)
- * Perbaikan: fetchHistory range undefined, navigasi guard, duplikat listener,
- *            sinkronisasi penuh ke semua endpoint backend.
+ * app.js — MediClimate RS Dashboard v2.2
+ * Perbaikan v2.2: ROOM_CONFIG di-fetch dari /api/rooms (single source of truth),
+ *   currentMode default 'publik', AI chat dengan conversation history.
  */
 
 'use strict';
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const ROOM_CONFIG = [
+// ROOM_CONFIG dimuat dari /api/rooms saat init. Nilai di bawah adalah FALLBACK
+// jika backend tidak bisa dijangkau, sehingga UI tidak kosong.
+let ROOM_CONFIG = [
   { id: "NICU-01",    name: "NICU",              floor: "Lt. 2", tempMin: 24, tempMax: 26, humMin: 50, humMax: 60 },
   { id: "BANGSAL-A",  name: "Bangsal Bayi",       floor: "Lt. 2", tempMin: 22, tempMax: 26, humMin: 45, humMax: 60 },
   { id: "BANGSAL-B",  name: "Bangsal Anak Umum",  floor: "Lt. 3", tempMin: 20, tempMax: 24, humMin: 40, humMax: 60 },
@@ -41,7 +43,8 @@ const State = {
   historyData: [],
   isMicActive: false,
   recognition: null,
-  currentPage: '',   // kosong agar navigateTo('dashboard') tidak terkena guard
+  currentPage: '',        // kosong agar navigateTo('dashboard') tidak terkena guard
+  chatHistory: [],        // [{role: 'user'|'model', text: '...'}] — riwayat percakapan AI
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -631,21 +634,34 @@ async function sendChat() {
   appendMsg('user', msg);
   showTyping();
 
+  // Tambah pesan user ke history sebelum dikirim
+  State.chatHistory.push({ role: 'user', text: msg });
+  // Batasi history 20 pesan terakhir (~10 bolak-balik) agar token usage terjaga
+  if (State.chatHistory.length > 20) State.chatHistory = State.chatHistory.slice(-20);
+
   try {
     const res = await fetch(CONFIG.API_BASE_URL + '/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg }),
+      // Kirim history percakapan sebelumnya (tanpa pesan terbaru — sudah di 'message')
+      body: JSON.stringify({ message: msg, history: State.chatHistory.slice(0, -1) }),
     });
     hideTyping();
     if (!res.ok) {
-      appendMsg('ai', '❌ ' + ((await res.json().catch(() => ({}))).error || 'Terjadi kesalahan.'));
+      const errMsg = ((await res.json().catch(() => ({}))).error || 'Terjadi kesalahan.');
+      appendMsg('ai', '❌ ' + errMsg);
+      // Batalkan penambahan ke history jika gagal
+      State.chatHistory.pop();
     } else {
-      appendMsg('ai', (await res.json()).reply || '—');
+      const reply = (await res.json()).reply || '—';
+      appendMsg('ai', reply);
+      // Simpan balasan AI ke history
+      State.chatHistory.push({ role: 'model', text: reply });
     }
   } catch (e) {
     hideTyping();
     appendMsg('ai', '❌ Gagal terhubung ke server.');
+    State.chatHistory.pop();
   } finally {
     if (sendBtn) sendBtn.disabled = false;
     if (input) input.focus();
@@ -828,15 +844,31 @@ function attachListeners() {
   }
 }
 
+// ── FETCH ROOMS (single source of truth dari backend) ────────────────────────
+async function fetchRooms() {
+  try {
+    const res = await fetch(CONFIG.API_BASE_URL + '/api/rooms');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      ROOM_CONFIG = data;
+      console.info('[Rooms] ROOM_CONFIG diperbarui dari backend:', ROOM_CONFIG.length, 'ruangan');
+    }
+  } catch (e) {
+    console.warn('[Rooms] Gagal fetch dari backend, pakai fallback lokal:', e.message);
+  }
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
-function init() {
+async function init() {
   initCharts();
   initSpeech();
   attachListeners();
   startClock();
+  await fetchRooms();   // Pastikan ROOM_CONFIG sudah terisi sebelum polling dimulai
   startPolling();
-  initAuth();  // Initialize Firebase Auth & Login Screen
-  console.info('[MediClimate RS v2.1] OK — backend:', CONFIG.API_BASE_URL);
+  initAuth();
+  console.info('[MediClimate RS v2.2] OK — backend:', CONFIG.API_BASE_URL);
 }
 
 if (document.readyState === 'loading') {
@@ -846,7 +878,9 @@ if (document.readyState === 'loading') {
 }
 
 // ─── AUTHENTICATION (Login System) ──────────────────────────
-let currentMode = 'public'; // 'public' | 'internal'
+// Default 'publik' (bukan 'public') agar guard currentMode === 'publik' bekerja
+// dengan benar sebelum Firebase Auth selesai verifikasi user.
+let currentMode = 'publik'; // 'publik' | 'internal'
 
 function initAuth() {
   try {
