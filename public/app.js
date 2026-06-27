@@ -811,6 +811,12 @@ function exportPDF() {
   const w = window.open('', '_blank', 'width=900,height=700');
   if (!w) { alert('Pop-up diblokir browser. Izinkan pop-up lalu coba lagi.'); return; }
 
+  // Nama ruangan untuk judul laporan
+  const roomLabel = State.histDevice
+    ? (ROOM_CONFIG.find(r => r.id === State.histDevice)?.name || State.histDevice)
+    : 'Semua Ruangan';
+  const roomSlug = roomLabel.replace(/\s+/g, '-');
+
   const ts  = recs.map(r => r.temperature);
   const hs  = recs.map(r => r.humidity);
   const avg = arr => (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1);
@@ -824,10 +830,11 @@ function exportPDF() {
   }).join('');
 
   w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8">
-<title>MediClimate RS — History Report</title>
+<title>MediClimate RS — History Report — ${roomLabel}</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Arial,sans-serif;color:#111;padding:32px}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:18px;border-bottom:2.5px solid #111}
 h1{font-size:22px;font-weight:800;letter-spacing:-0.02em}.meta{font-size:12px;color:#666;margin-top:5px}
+.room-badge{display:inline-block;margin-top:8px;padding:3px 10px;background:#f3f3f1;border:1px solid #ddd;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em;color:#444}
 .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
 .sc{border:1px solid #e5e5e5;border-radius:8px;padding:12px 14px}.sl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888}.sv{font-size:22px;font-weight:800;margin-top:4px}
 table{width:100%;border-collapse:collapse;font-size:12.5px}thead tr{background:#f3f3f1}
@@ -836,7 +843,8 @@ th:nth-child(2),th:nth-child(3){text-align:right}td{padding:7px 14px;border-bott
 .ftr{margin-top:22px;padding-top:12px;border-top:1px solid #e5e5e5;font-size:11px;color:#888;display:flex;justify-content:space-between}
 @media print{.np{display:none}}</style></head><body>
 <div class="hdr"><div><h1>MediClimate RS · History Report</h1>
-<div class="meta">Rentang: ${State.histRange} &nbsp;·&nbsp; Dibuat: ${new Date().toLocaleString('id-ID',{hour12:false})} &nbsp;·&nbsp; Semarang ESP32</div></div>
+<div class="meta">Rentang: ${State.histRange} &nbsp;·&nbsp; Dibuat: ${new Date().toLocaleString('id-ID',{hour12:false})} &nbsp;·&nbsp; Semarang ESP32</div>
+<div class="room-badge">📍 ${roomLabel}</div></div>
 <button class="np" onclick="window.print()" style="padding:8px 18px;background:#111;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Print / Save PDF</button></div>
 <div class="sum">
   <div class="sc"><div class="sl">Records</div><div class="sv">${recs.length}</div></div>
@@ -846,7 +854,7 @@ th:nth-child(2),th:nth-child(3){text-align:right}td{padding:7px 14px;border-bott
 </div>
 <table><thead><tr><th>Timestamp</th><th>Suhu (°C)</th><th>Kelembaban (%)</th><th>Device ID</th></tr></thead>
 <tbody>${rows}</tbody></table>
-<div class="ftr"><span>MediClimate RS · ESP32 + Firebase + Gemini · Semarang 2026</span><span>${recs.length} records · Rentang: ${State.histRange}</span></div>
+<div class="ftr"><span>MediClimate RS · ESP32 + Firebase + Gemini · Semarang 2026</span><span>${recs.length} records · ${roomLabel} · Rentang: ${State.histRange}</span></div>
 </body></html>`);
   w.document.close();
 }
@@ -920,9 +928,12 @@ function attachListeners() {
     // 8. CSV Dashboard
     const csvDash = e.target.closest('#btn-export-csv');
     if (csvDash) {
+      const dashRoom = State.selectedRoom
+        ? (ROOM_CONFIG.find(r => r.id === State.selectedRoom)?.name || State.selectedRoom).replace(/\s+/g, '-')
+        : 'semua-ruangan';
       downloadCSV(
         State.chartData.labels, State.chartData.temps, State.chartData.hums,
-        'climateos-dashboard-' + new Date().toISOString().slice(0,10) + '.csv'
+        'climateos-dashboard-' + dashRoom + '-' + new Date().toISOString().slice(0,10) + '.csv'
       );
       return;
     }
@@ -930,11 +941,14 @@ function attachListeners() {
     // 9. CSV History
     const csvHist = e.target.closest('#btn-export-csv-history');
     if (csvHist) {
+      const histRoom = State.histDevice
+        ? (ROOM_CONFIG.find(r => r.id === State.histDevice)?.name || State.histDevice).replace(/\s+/g, '-')
+        : 'semua-ruangan';
       downloadCSV(
         State.historyData.map(r => r.timestamp),
         State.historyData.map(r => r.temperature),
         State.historyData.map(r => r.humidity),
-        'climateos-history-' + State.histRange + '-' + new Date().toISOString().slice(0,10) + '.csv'
+        'climateos-history-' + State.histRange + '-' + histRoom + '-' + new Date().toISOString().slice(0,10) + '.csv'
       );
       return;
     }
