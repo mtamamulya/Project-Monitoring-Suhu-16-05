@@ -37,7 +37,7 @@
 
   <style>
     :root, html[data-theme="light"]{
-      --bg: #FAFAF9; --bg-2: #F4F4F2; --card: #FFFFFF; --hair: #ECECEA; --hair-2: #F2F2F0;
+      --bg: #FAFAF9; --bg-2: #F4F4F2; --card: #FFFFFF; --hair: #DCDCDA; --hair-2: #E8E8E6;
       --ink: #0A0A0B; --ink-2: #27272A; --muted: #6B7280; --muted-2: #9CA3AF;
       --teal: oklch(0.55 0.10 195); --teal-soft: oklch(0.95 0.025 195);
       --coral: oklch(0.62 0.16 25); --coral-soft: oklch(0.96 0.03 25);
@@ -55,10 +55,10 @@
       --sidebar-bg: rgba(250,250,249,0.95);
       --gauge-track: #EFEFED;
       --scroll-thumb: #DEDEDA; --scroll-thumb-h: #C5C5C2;
-      --shadow-xs: 0 1px 0 rgba(10,10,11,0.04);
-      --shadow-sm: 0 1px 2px rgba(10,10,11,0.04), 0 0 0 1px rgba(10,10,11,0.04);
-      --shadow: 0 1px 2px rgba(10,10,11,0.04), 0 8px 24px -10px rgba(10,10,11,0.10);
-      --shadow-lg: 0 1px 2px rgba(10,10,11,0.04), 0 24px 48px -16px rgba(10,10,11,0.14);
+      --shadow-xs: 0 1px 2px rgba(10,10,11,0.06);
+      --shadow-sm: 0 1px 3px rgba(10,10,11,0.08), 0 0 0 1px rgba(10,10,11,0.06);
+      --shadow: 0 1px 3px rgba(10,10,11,0.08), 0 8px 24px -10px rgba(10,10,11,0.13);
+      --shadow-lg: 0 1px 3px rgba(10,10,11,0.08), 0 24px 48px -16px rgba(10,10,11,0.18);
     }
 
     html[data-theme="dark"]{
@@ -175,6 +175,10 @@
       background: var(--bg-2);
       color: var(--ink-2);
     }
+    .nav-item:active {
+      transform: scale(0.97);
+      opacity: 0.8;
+    }
 
     .nav-item.active {
       background: var(--bg-2);
@@ -287,6 +291,15 @@
       letter-spacing: 0.01em;
     }
 
+    .bnav-item:hover {
+      background: var(--bg-2);
+      color: var(--ink-2);
+    }
+    .bnav-item:active {
+      transform: scale(0.93) translateY(1px);
+      opacity: 0.75;
+    }
+
     .bnav-item.active {
       color: var(--ink);
     }
@@ -325,7 +338,8 @@
       transition: all 0.14s ease; cursor: pointer; box-shadow: var(--shadow-xs);
       font-family: 'Geist', sans-serif;
     }
-    .btn-ghost:hover { color: var(--ink); border-color: var(--muted-2); box-shadow: var(--shadow-sm); }
+    .btn-ghost:hover  { color: var(--ink); border-color: var(--muted-2); box-shadow: var(--shadow-sm); }
+    .btn-ghost:active { transform: scale(0.97) translateY(1px); box-shadow: none; }
 
     .btn-primary {
       display: inline-flex; align-items: center; gap: 6px;
@@ -336,7 +350,8 @@
       box-shadow: 0 1px 2px rgba(10,10,11,0.18), inset 0 1px 0 rgba(255,255,255,0.08);
       font-family: 'Geist', sans-serif;
     }
-    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:hover  { opacity: 0.88; }
+    .btn-primary:active { transform: scale(0.97) translateY(1px); opacity: 0.78; }
 
     .btn-icon {
       width: 36px; height: 36px;
@@ -345,7 +360,8 @@
       border: 1px solid var(--hair); color: var(--ink-2);
       transition: all 0.14s ease; cursor: pointer; flex-shrink: 0;
     }
-    .btn-icon:hover { color: var(--ink); border-color: var(--muted-2); }
+    .btn-icon:hover  { color: var(--ink); border-color: var(--muted-2); }
+    .btn-icon:active { transform: scale(0.93) translateY(1px); }
 
     /* ── Pills / badges ── */
     .pill {
@@ -506,8 +522,30 @@
       border: none; cursor: pointer; transition: all 0.14s ease;
       font-family: 'Geist', sans-serif;
     }
-    .seg-btn:hover { color: var(--ink-2); }
-    .seg-btn.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-xs), 0 0 0 1px var(--hair); }
+    .seg-btn:hover  { color: var(--ink-2); background: rgba(10,10,11,0.04); }
+    .seg-btn:active { transform: scale(0.95) translateY(1px); opacity: 0.75; }
+    .seg-btn.active {
+      background: var(--card); color: var(--ink);
+      box-shadow: var(--shadow-sm), 0 0 0 1px var(--muted-2);
+      font-weight: 600;
+    }
+
+    /* ── ML Analytics tab buttons ── */
+    .btn-tab {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--hair); background: transparent;
+      color: var(--muted); transition: all 0.14s ease;
+      font-family: 'Geist', sans-serif;
+    }
+    .btn-tab:hover  { color: var(--ink-2); background: var(--bg-2); border-color: var(--muted-2); }
+    .btn-tab:active { transform: scale(0.97) translateY(1px); opacity: 0.8; }
+    .btn-tab.active {
+      background: var(--ink); color: var(--bg);
+      border-color: var(--ink);
+      box-shadow: 0 1px 4px rgba(10,10,11,0.22);
+    }
 
     /* ── Stat card ── */
     .stat-card { transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
@@ -1426,7 +1464,7 @@
               <h1 style="font-size:22px; font-weight:700; letter-spacing:-0.5px; margin:0 0 4px;">ML Analytics</h1>
               <p class="text-muted" style="font-size:13px; margin:0;">Jalankan model Machine Learning untuk mendeteksi anomali dan memprediksi tren suhu & kelembaban.</p>
             </div>
-            <button id="btn-start-analysis" onclick="runMlAnalysis()" style="display:inline-flex; align-items:center; gap:8px; background:var(--primary); color:#fff; border:none; border-radius:10px; padding:10px 20px; font-size:13px; font-weight:600; cursor:pointer; flex-shrink:0;">
+            <button id="btn-start-analysis" onclick="runMlAnalysis()" class="btn-primary" style="border-radius:10px; padding:10px 20px; font-size:13px; font-weight:600; flex-shrink:0;">
               <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
               </svg>
@@ -1483,31 +1521,31 @@
 
             <!-- Summary cards -->
             <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:20px;">
-              <div class="card" style="padding:16px; text-align:center;">
-                <div style="font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--ink-2); margin-bottom:8px;">Rata-rata Suhu</div>
-                <div id="ml-stat-temp" style="font-size:24px; font-weight:700; color:var(--primary);">—</div>
+              <div class="card stat-card" style="padding:16px; text-align:center;">
+                <div style="font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Rata-rata Suhu</div>
+                <div id="ml-stat-temp" style="font-size:24px; font-weight:700; color:var(--ink);">—</div>
               </div>
-              <div class="card" style="padding:16px; text-align:center;">
-                <div style="font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--ink-2); margin-bottom:8px;">Anomali Terdeteksi</div>
+              <div class="card stat-card" style="padding:16px; text-align:center;">
+                <div style="font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Anomali Terdeteksi</div>
                 <div id="ml-stat-anomaly" style="font-size:24px; font-weight:700; color:var(--crit);">—</div>
               </div>
-              <div class="card" style="padding:16px; text-align:center;">
-                <div style="font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--ink-2); margin-bottom:8px;">Prediksi Maksimum</div>
+              <div class="card stat-card" style="padding:16px; text-align:center;">
+                <div style="font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Prediksi Maksimum</div>
                 <div id="ml-stat-forecast-max" style="font-size:24px; font-weight:700; color:var(--amber);">—</div>
               </div>
-              <div class="card" style="padding:16px; text-align:center;">
-                <div style="font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--ink-2); margin-bottom:8px;">Data Diproses</div>
+              <div class="card stat-card" style="padding:16px; text-align:center;">
+                <div style="font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Data Diproses</div>
                 <div id="ml-stat-count" style="font-size:24px; font-weight:700; color:var(--emerald);">—</div>
               </div>
             </div>
 
             <!-- Tab toggle -->
             <div style="display:flex; gap:8px; margin-bottom:16px;">
-              <button id="ml-tab-predictive" onclick="switchMlTab('predictive')" style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--primary); background:var(--primary); color:#fff;">
+              <button id="ml-tab-predictive" class="btn-tab active" onclick="switchMlTab('predictive')">
                 <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
                 Predictive Models
               </button>
-              <button id="ml-tab-xai" onclick="switchMlTab('xai')" style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--hair); background:var(--card); color:var(--ink);">
+              <button id="ml-tab-xai" class="btn-tab" onclick="switchMlTab('xai')">
                 <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
                 Explainable AI (XAI)
               </button>

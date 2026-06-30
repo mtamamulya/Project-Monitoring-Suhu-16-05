@@ -1165,8 +1165,8 @@ function switchMlTab(tab) {
   $('ml-panel-predictive').style.display = isPred ? 'block' : 'none';
   $('ml-panel-xai').style.display        = isPred ? 'none'  : 'block';
   const btnP = $('ml-tab-predictive'), btnX = $('ml-tab-xai');
-  if (btnP) { btnP.style.background = isPred ? 'var(--primary)' : 'var(--card)'; btnP.style.color = isPred ? '#fff' : 'var(--ink)'; btnP.style.borderColor = isPred ? 'var(--primary)' : 'var(--hair)'; }
-  if (btnX) { btnX.style.background = isPred ? 'var(--card)' : 'var(--primary)'; btnX.style.color = isPred ? 'var(--ink)' : '#fff'; btnX.style.borderColor = isPred ? 'var(--hair)' : 'var(--primary)'; }
+  if (btnP) { btnP.classList.toggle('active', isPred); }
+  if (btnX) { btnX.classList.toggle('active', !isPred); }
 }
 
 function _mlSetState(state) {
