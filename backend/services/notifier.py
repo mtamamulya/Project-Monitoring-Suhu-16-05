@@ -55,6 +55,20 @@ def _send_discord_embed(webhook_url: str, embed: dict):
     except Exception as e:
         logger.error(f"Discord send error: {e}")
 
+def _send_whatsapp(token, target, message):
+    """Send WhatsApp message via Fonnte API."""
+    if not token or not target:
+        return
+    try:
+        requests.post(
+            "https://api.fonnte.com/send",
+            headers={"Authorization": token},
+            data={"target": target, "message": message},
+            timeout=10
+        )
+    except Exception as e:
+        logger.error(f"WhatsApp send error: {e}")
+
 def get_deviations(temp, hum, room_conf):
     d_temp = 0.0
     if temp < room_conf['tempMin']: d_temp = room_conf['tempMin'] - temp
@@ -67,29 +81,30 @@ def get_deviations(temp, hum, room_conf):
 
 def process_alert(temperature: float, humidity: float, device_id: str):
     if device_id not in ROOM_CONFIG:
-        return # Skip unknown devices
-    
+        return
+
     _load_states()
     now = datetime.now(timezone.utc)
     room = ROOM_CONFIG[device_id]
 
-    # --- FIX: grab env vars early so recovery block can use them ---
-    tg_token   = os.environ.get("TELEGRAM_BOT_TOKEN")
-    tg_perawat = os.environ.get("TELEGRAM_CHAT_ID_PERAWAT")
+    tg_token    = os.environ.get("TELEGRAM_BOT_TOKEN")
+    tg_perawat  = os.environ.get("TELEGRAM_CHAT_ID_PERAWAT")
     tg_direktur = os.environ.get("TELEGRAM_CHAT_ID_DIREKTUR")
     discord_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    wa_token    = os.environ.get("FONNTE_TOKEN")
+    wa_perawat  = os.environ.get("WA_CHAT_ID_PERAWAT")
+    wa_direktur = os.environ.get("WA_CHAT_ID_DIREKTUR")
     now_wib = datetime.now(WIB).strftime("%H:%M:%S WIB")
-    
+
     state = _alert_states.get(device_id, {
         "level": 0,
         "last_alert_sent_at": None,
         "critical_start_at": None,
         "escalated_to_emergency": False
     })
-    
+
     d_temp, d_hum = get_deviations(temperature, humidity, room)
-    
-    # Evaluate current condition
+
     condition_level = 0
     if temperature >= 32.0 or temperature <= 18.0:
         condition_level = 3
@@ -97,35 +112,31 @@ def process_alert(temperature: float, humidity: float, device_id: str):
         condition_level = 2
     elif d_temp > 0 or d_hum > 0:
         condition_level = 1
-        
-    # Handle Critical (Level 2) time condition for Temp
+
     if condition_level == 2:
         if state.get("critical_start_at") is None:
             state["critical_start_at"] = now.isoformat()
-        
         c_start = datetime.fromisoformat(state["critical_start_at"]) if state.get("critical_start_at") else now
         if d_temp > 2.0 and d_hum <= 10.0:
             if (now - c_start).total_seconds() < 180:
-                condition_level = 1 # Downgrade to level 1 if < 3 mins
+                condition_level = 1
     elif condition_level == 0:
         state["critical_start_at"] = None
 
-    # Handle Escalation Level 2 -> Level 3 (unresolved for 15 mins)
     if condition_level == 2:
         c_start = datetime.fromisoformat(state["critical_start_at"]) if state.get("critical_start_at") else now
-        if (now - c_start).total_seconds() >= 900: # 15 mins
+        if (now - c_start).total_seconds() >= 900:
             condition_level = 3
             state["escalated_to_emergency"] = True
 
     if condition_level < 3:
         state["escalated_to_emergency"] = False
 
-    # Determine if we should send an alert based on cooldowns
     should_send = False
     last_sent = datetime.fromisoformat(state["last_alert_sent_at"]) if state.get("last_alert_sent_at") else None
-    
+
     if condition_level > 0 and (state["level"] != condition_level):
-        should_send = True # State changed
+        should_send = True
     elif condition_level > 0 and last_sent:
         elapsed = (now - last_sent).total_seconds() / 60.0
         if condition_level == 1 and elapsed >= 10:
@@ -137,22 +148,26 @@ def process_alert(temperature: float, humidity: float, device_id: str):
     elif condition_level > 0 and not last_sent:
         should_send = True
 
-    # --- FIX Bug 1: RESOLVED notif ke Perawat DAN Direktur ---
-    # Check for recovery
+    # ── RESOLVED ──────────────────────────────────────────────────
     if condition_level == 0 and state["level"] > 0:
-        prev_level = state["level"]  # remember before reset
-        msg_resolved = (
+        prev_level = state["level"]
+        tg_msg = (
             f"✅ <b>RESOLVED</b> — {room['name']}\n"
             f"Suhu dan Kelembaban kembali normal.\n"
             f"Suhu: {temperature}°C | Humidity: {humidity}%\n"
             f"Waktu: {now_wib}"
         )
-        # Always notify Perawat
-        send_telegram(tg_token, tg_perawat, msg_resolved)
-        # Notify Direktur jika kondisi sebelumnya Emergency (L3)
+        wa_msg = (
+            f"✅ *RESOLVED* — {room['name']}\n"
+            f"Suhu dan Kelembaban kembali normal.\n"
+            f"Suhu: {temperature}°C | Humidity: {humidity}%\n"
+            f"Waktu: {now_wib}"
+        )
+        send_telegram(tg_token, tg_perawat, tg_msg)
+        _send_whatsapp(wa_token, wa_perawat, wa_msg)
         if prev_level >= 3:
-            send_telegram(tg_token, tg_direktur, msg_resolved)
-        # Send Discord resolved embed jika sebelumnya L1
+            send_telegram(tg_token, tg_direktur, tg_msg)
+            _send_whatsapp(wa_token, wa_direktur, wa_msg)
         if prev_level == 1 and discord_url:
             embed_resolved = {
                 "title": f"✅ RESOLVED — {room['name']}",
@@ -169,44 +184,51 @@ def process_alert(temperature: float, humidity: float, device_id: str):
         _save_state(device_id, state)
         return
 
-    # --- FIX Bug 2: Selalu update in-memory, persist saat level berubah ---
+    # ── UPDATE STATE ───────────────────────────────────────────────
     prev_level = state.get("level", 0)
     state["level"] = condition_level
-    _alert_states[device_id] = state  # always update in-memory
+    _alert_states[device_id] = state
 
     if should_send:
         state["last_alert_sent_at"] = now.isoformat()
         _save_state(device_id, state)
-        
+
         if condition_level == 1:
-            # Level 1 -> Discord (fallback ke Telegram Perawat jika Discord tidak dikonfigurasi)
+            # L1 → Discord + WA Perawat
+            wa_msg = (
+                f"⚠️ *WARNING* — {room['name']}\n"
+                f"Suhu/Humidity di luar batas normal.\n"
+                f"Suhu: {temperature}°C (Limit: {room['tempMin']}-{room['tempMax']}°C)\n"
+                f"Humidity: {humidity}% (Limit: {room['humMin']}-{room['humMax']}%)\n"
+                f"Waktu: {now_wib}"
+            )
+            _send_whatsapp(wa_token, wa_perawat, wa_msg)
             if discord_url:
                 embed = {
                     "title": f"⚠️ WARNING — {room['name']}",
                     "description": f"Suhu/Humidity di luar batas normal.",
                     "color": 0xF6E05E,
                     "fields": [
-                        {"name": "Suhu", "value": f"{temperature}°C (Limit: {room['tempMin']}-{room['tempMax']})", "inline": True},
-                        {"name": "Humidity", "value": f"{humidity}% (Limit: {room['humMin']}-{room['humMax']})", "inline": True}
+                        {"name": "Suhu",     "value": f"{temperature}°C (Limit: {room['tempMin']}-{room['tempMax']})", "inline": True},
+                        {"name": "Humidity", "value": f"{humidity}% (Limit: {room['humMin']}-{room['humMax']})",       "inline": True}
                     ],
                     "footer": {"text": f"MediClimate RS • {now_wib}"}
                 }
                 _send_discord_embed(discord_url, embed)
             else:
-                # Fallback: kirim ke Telegram Perawat jika Discord tidak ada
-                logger.warning(f"DISCORD_WEBHOOK_URL not set — sending L1 alert to Telegram Perawat instead")
-                msg = (
+                logger.warning("DISCORD_WEBHOOK_URL not set — sending L1 to Telegram Perawat instead")
+                tg_msg = (
                     f"⚠️ <b>WARNING</b> — {room['name']}\n"
                     f"Suhu/Humidity di luar batas normal.\n"
                     f"Suhu: {temperature}°C (Limit: {room['tempMin']}-{room['tempMax']}°C)\n"
                     f"Humidity: {humidity}% (Limit: {room['humMin']}-{room['humMax']}%)\n"
                     f"Waktu: {now_wib}"
                 )
-                send_telegram(tg_token, tg_perawat, msg)
-            
+                send_telegram(tg_token, tg_perawat, tg_msg)
+
         elif condition_level == 2:
-            # Level 2 -> Telegram Perawat
-            msg = (
+            # L2 → Telegram Perawat + WA Perawat
+            tg_msg = (
                 f"🚨 <b>CRITICAL ALERT</b> — {room['name']}\n"
                 f"Suhu: {temperature}°C (threshold: {room['tempMin']}-{room['tempMax']}°C)\n"
                 f"Humidity: {humidity}% (threshold: {room['humMin']}-{room['humMax']}%)\n"
@@ -214,12 +236,21 @@ def process_alert(temperature: float, humidity: float, device_id: str):
                 f"Waktu: {now_wib}\n"
                 f"Segera periksa kondisi ruangan."
             )
-            send_telegram(tg_token, tg_perawat, msg)
-            
+            wa_msg = (
+                f"🚨 *CRITICAL ALERT* — {room['name']}\n"
+                f"Suhu: {temperature}°C (threshold: {room['tempMin']}-{room['tempMax']}°C)\n"
+                f"Humidity: {humidity}% (threshold: {room['humMin']}-{room['humMax']}%)\n"
+                f"Device: {device_id}\n"
+                f"Waktu: {now_wib}\n"
+                f"Segera periksa kondisi ruangan."
+            )
+            send_telegram(tg_token, tg_perawat, tg_msg)
+            _send_whatsapp(wa_token, wa_perawat, wa_msg)
+
         elif condition_level == 3:
-            # Level 3 -> Telegram Direktur
+            # L3 → Telegram Direktur + WA Perawat + WA Direktur
             status_text = "ESKALASI L2 (TIDAK RESOLVED > 15 MENIT)" if state.get("escalated_to_emergency") else "SUHU KRITIS (>=32 atau <=18)"
-            msg = (
+            tg_msg = (
                 f"🔴 <b>EMERGENCY</b> — {room['name']}\n"
                 f"⚠️ <b>PERHATIAN SEGERA DIPERLUKAN</b>\n"
                 f"Suhu: {temperature}°C (threshold: {room['tempMin']}-{room['tempMax']}°C)\n"
@@ -229,24 +260,34 @@ def process_alert(temperature: float, humidity: float, device_id: str):
                 f"Status: {status_text}\n"
                 f"Hubungi teknisi dan kepala perawat segera."
             )
-            send_telegram(tg_token, tg_direktur, msg)
+            wa_msg = (
+                f"🔴 *EMERGENCY* — {room['name']}\n"
+                f"⚠️ *PERHATIAN SEGERA DIPERLUKAN*\n"
+                f"Suhu: {temperature}°C (threshold: {room['tempMin']}-{room['tempMax']}°C)\n"
+                f"Humidity: {humidity}% (threshold: {room['humMin']}-{room['humMax']}%)\n"
+                f"Device: {device_id}\n"
+                f"Waktu: {now_wib}\n"
+                f"Status: {status_text}\n"
+                f"Hubungi teknisi dan kepala perawat segera."
+            )
+            send_telegram(tg_token, tg_direktur, tg_msg)
+            _send_whatsapp(wa_token, wa_perawat, wa_msg)
+            _send_whatsapp(wa_token, wa_direktur, wa_msg)
 
     elif prev_level != condition_level:
-        # Level berubah tapi cooldown aktif — tetap persist ke Firestore agar cold start tidak miss
         _save_state(device_id, state)
 
+
 def check_offline_sensors():
-    """
-    Check if any registered sensor hasn't sent data in >5 minutes.
-    If offline, send Level 3 alert to Telegram Direktur.
-    Called from /api/sensor-status endpoint.
-    """
+    """Check if any registered sensor hasn't sent data in >5 minutes."""
     _load_states()
     now = datetime.now(timezone.utc)
-    
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+
+    tg_token    = os.environ.get("TELEGRAM_BOT_TOKEN")
     tg_direktur = os.environ.get("TELEGRAM_CHAT_ID_DIREKTUR")
-    
+    wa_token    = os.environ.get("FONNTE_TOKEN")
+    wa_direktur = os.environ.get("WA_CHAT_ID_DIREKTUR")
+
     if not tg_token or not tg_direktur:
         logger.warning("Telegram Direktur config missing, skip offline check")
         return
@@ -254,24 +295,24 @@ def check_offline_sensors():
     for device_id, room in ROOM_CONFIG.items():
         state = _alert_states.get(device_id, {})
         last_seen_str = state.get("last_data_at")
-        
+
         if not last_seen_str:
             continue
-        
+
         try:
             last_seen = datetime.fromisoformat(last_seen_str)
         except (ValueError, TypeError):
             continue
-        
+
         diff_seconds = (now - last_seen).total_seconds()
         already_notified = state.get("offline_notified", False)
-        
+
         if diff_seconds > 300 and not already_notified:
-            now_wib = datetime.now(WIB).strftime("%H:%M:%S WIB")
+            now_wib  = datetime.now(WIB).strftime("%H:%M:%S WIB")
             last_wib = last_seen.astimezone(WIB).strftime("%H:%M:%S WIB")
             offline_mins = int(diff_seconds / 60)
-            
-            msg = (
+
+            tg_msg = (
                 f"🔴 <b>SENSOR OFFLINE</b> — {room['name']}\n"
                 f"⚠️ <b>Sensor tidak mengirim data > {offline_mins} menit</b>\n"
                 f"Device: {device_id}\n"
@@ -279,23 +320,38 @@ def check_offline_sensors():
                 f"Waktu deteksi: {now_wib}\n"
                 f"Periksa koneksi sensor dan WiFi segera."
             )
-            send_telegram(tg_token, tg_direktur, msg)
-            logger.info(f"Offline alert sent for {device_id} to Direktur")
-            
+            wa_msg = (
+                f"🔴 *SENSOR OFFLINE* — {room['name']}\n"
+                f"⚠️ Sensor tidak mengirim data > {offline_mins} menit\n"
+                f"Device: {device_id}\n"
+                f"Data terakhir: {last_wib}\n"
+                f"Waktu deteksi: {now_wib}\n"
+                f"Periksa koneksi sensor dan WiFi segera."
+            )
+            send_telegram(tg_token, tg_direktur, tg_msg)
+            _send_whatsapp(wa_token, wa_direktur, wa_msg)
+            logger.info(f"Offline alert sent for {device_id}")
+
             state["offline_notified"] = True
             _alert_states[device_id] = state
             _save_state(device_id, state)
-        
+
         elif diff_seconds <= 300 and already_notified:
             now_wib = datetime.now(WIB).strftime("%H:%M:%S WIB")
-            msg = (
+            tg_msg = (
                 f"✅ <b>SENSOR ONLINE</b> — {room['name']}\n"
                 f"Sensor {device_id} kembali aktif.\n"
                 f"Waktu: {now_wib}"
             )
-            send_telegram(tg_token, tg_direktur, msg)
-            logger.info(f"Online recovery sent for {device_id} to Direktur")
-            
+            wa_msg = (
+                f"✅ *SENSOR ONLINE* — {room['name']}\n"
+                f"Sensor {device_id} kembali aktif.\n"
+                f"Waktu: {now_wib}"
+            )
+            send_telegram(tg_token, tg_direktur, tg_msg)
+            _send_whatsapp(wa_token, wa_direktur, wa_msg)
+            logger.info(f"Online recovery sent for {device_id}")
+
             state["offline_notified"] = False
             _alert_states[device_id] = state
             _save_state(device_id, state)
