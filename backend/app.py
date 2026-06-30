@@ -27,6 +27,7 @@ from services.buffer import (
     get_latest, get_all_latest, get_buffer_size,
 )
 from routes.ai import handle_chat
+from routes.analytics import run_analytics
 
 # ── Logging ───────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
@@ -482,6 +483,36 @@ def compliance():
     except Exception as exc:
         logger.error("Compliance Firestore query failed: %s", exc)
         return jsonify({"error": f"Query failed: {exc}"}), 500
+
+
+# ── 10. ML Analytics ──────────────────────────────────────────
+@app.route("/api/analytics", methods=["GET"])
+def analytics():
+    """
+    Jalankan analisis ML (Linear Regression, Z-Score, K-Means, SHAP) pada data historis.
+    Query params:
+      device_id : opsional — filter ke satu ruangan (kosong = semua ruangan)
+      range     : 1 | 3 | 7 | 30  (hari, default: 7)
+    """
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+
+    device_id = request.args.get("device_id") or None
+    try:
+        range_days = int(request.args.get("range", 7))
+        if range_days not in (1, 3, 7, 30):
+            range_days = 7
+    except (ValueError, TypeError):
+        range_days = 7
+
+    try:
+        result = run_analytics(db, device_id, range_days)
+        if "error" in result:
+            return jsonify(result), 422
+        return jsonify(result)
+    except Exception as exc:
+        logger.error("Analytics error: %s", exc)
+        return jsonify({"error": f"Analisis gagal: {exc}"}), 500
 
 
 # ── Bootstrap & Run ───────────────────────────────────────────

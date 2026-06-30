@@ -49,6 +49,9 @@ const State = {
   histDevice:      null,        // null = semua ruangan (history filter)
   analysisRoom:    null,        // null = semua ruangan (analysis filter)
   sensorStatuses:  {},          // device_id → status ('online'|'offline'|'warning'|'never')
+  notifSentFor:    {},          // device_id → last notified alert level ('ok'|'offline'|'warning'|'critical'|'emergency')
+  mlRoom:          null,         // null = semua ruangan (ml analytics filter)
+  mlRange:         7,            // rentang hari untuk analisis ML
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -58,6 +61,73 @@ const $$ = (sel) => document.querySelectorAll(sel);
 function setText(id, val) {
   const el = $(id);
   if (el) el.textContent = val;
+}
+
+// ── BROWSER PUSH NOTIFICATIONS ────────────────────────────────────────────────
+function _initBrowserNotif() {
+  if (!('Notification' in window)) return;
+  const btn = $('notif-enable-btn');
+  if (!btn) return;
+  if (Notification.permission === 'granted') {
+    btn.style.display = 'none';
+  } else if (Notification.permission === 'denied') {
+    btn.style.display = 'none'; // user explicitly blocked — don't nag
+  } else {
+    btn.style.display = 'inline-flex'; // show enable button
+  }
+}
+
+function _showPushNotif(title, body, tag, sticky = false) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    new Notification(title, { body, tag, requireInteraction: sticky });
+  } catch (e) { /* non-fatal */ }
+}
+
+window.enableBrowserNotif = async function() {
+  if (!('Notification' in window)) return;
+  const perm = await Notification.requestPermission();
+  const btn = $('notif-enable-btn');
+  if (btn) btn.style.display = 'none';
+  if (perm === 'granted') {
+    _showPushNotif('MediClimate RS', 'Notifikasi aktif. Kamu akan menerima alert saat sensor offline atau kondisi kritis.', 'mediclimate-init');
+  }
+};
+
+function _checkPushNotifForSensor(s) {
+  if (!s || s.unknown || !s.device_id) return;
+  const did  = s.device_id;
+  const conf = ROOM_CONFIG.find(r => r.id === did);
+  if (!conf) return;
+
+  const prev = State.notifSentFor[did] || 'ok';
+  let   curr = 'ok';
+
+  if (s.status === 'offline' || s.status === 'never') {
+    curr = 'offline';
+  } else if (s.temperature != null) {
+    const t = s.temperature, h = s.humidity ?? 50;
+    if (t >= 32 || t <= 18) {
+      curr = 'emergency';
+    } else if (t > conf.tempMax + 2 || t < conf.tempMin - 2 || (h != null && (h > conf.humMax + 10 || h < conf.humMin - 10))) {
+      curr = 'critical';
+    } else if (t > conf.tempMax || t < conf.tempMin || (h != null && (h > conf.humMax || h < conf.humMin))) {
+      curr = 'warning';
+    }
+  }
+
+  if (curr !== prev) {
+    State.notifSentFor[did] = curr;
+    const name = conf.name;
+    if (curr === 'offline') {
+      _showPushNotif(`Sensor Offline: ${name}`, `Sensor ${name} tidak mengirim data. Periksa koneksi segera.`, `off-${did}`, true);
+    } else if (curr === 'emergency') {
+      _showPushNotif(`DARURAT: ${name}`, `Suhu ${s.temperature}°C — kondisi kritis, tindakan segera diperlukan!`, `emg-${did}`, true);
+    } else if (curr === 'critical') {
+      _showPushNotif(`Peringatan Kritis: ${name}`, `Suhu ${s.temperature}°C melebihi threshold. Periksa ruangan.`, `crit-${did}`, false);
+    }
+    // recovery (curr = 'ok' atau 'warning') — tidak perlu notif pop-up
+  }
 }
 
 // ── NAVIGASI ──────────────────────────────────────────────────────────────────
@@ -71,7 +141,7 @@ function navigateTo(page) {
   $$('.nav-item[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   $$('.bnav-item[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === page));
 
-  const titles = { dashboard: 'Dashboard', history: 'History', analysis: 'Analysis' };
+  const titles = { dashboard: 'Dashboard', history: 'History', analysis: 'Analysis', 'ml-analytics': 'ML Analytics' };
   setText('page-title', titles[page] || page);
 
   if (page === 'history') fetchAndRenderHistory(State.histRange);
@@ -999,6 +1069,7 @@ async function fetchRooms() {
   _populateRoomSwitcher();
   _populateHistoryFilter();
   _populateAnalysisFilter();
+  _populateMlRoomFilter();
 }
 
 function _populateRoomSwitcher() {
@@ -1056,6 +1127,242 @@ function _populateAnalysisFilter() {
     });
   }
 }
+
+// ── ML ANALYTICS ──────────────────────────────────────────────
+// Chart instances — disimpan agar bisa di-destroy sebelum rebuild
+let _mlTempChart = null, _mlHumChart = null, _mlAnomalyChart = null, _mlKmeansChart = null;
+
+function _populateMlRoomFilter() {
+  const sel = $('ml-room-filter');
+  if (!sel) return;
+  while (sel.options.length > 1) sel.remove(1);
+  ROOM_CONFIG.forEach(room => {
+    const opt = document.createElement('option');
+    opt.value = room.id;
+    opt.textContent = room.name;
+    sel.appendChild(opt);
+  });
+  if (!sel.dataset.listenerAttached) {
+    sel.dataset.listenerAttached = '1';
+    sel.addEventListener('change', () => { State.mlRoom = sel.value || null; });
+  }
+  // Range seg buttons
+  const seg = $('ml-range-seg');
+  if (seg && !seg.dataset.listenerAttached) {
+    seg.dataset.listenerAttached = '1';
+    seg.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        State.mlRange = parseInt(btn.dataset.range, 10);
+      });
+    });
+  }
+}
+
+function switchMlTab(tab) {
+  const isPred = tab === 'predictive';
+  $('ml-panel-predictive').style.display = isPred ? 'block' : 'none';
+  $('ml-panel-xai').style.display        = isPred ? 'none'  : 'block';
+  const btnP = $('ml-tab-predictive'), btnX = $('ml-tab-xai');
+  if (btnP) { btnP.style.background = isPred ? 'var(--primary)' : 'var(--card)'; btnP.style.color = isPred ? '#fff' : 'var(--ink)'; btnP.style.borderColor = isPred ? 'var(--primary)' : 'var(--hair)'; }
+  if (btnX) { btnX.style.background = isPred ? 'var(--card)' : 'var(--primary)'; btnX.style.color = isPred ? 'var(--ink)' : '#fff'; btnX.style.borderColor = isPred ? 'var(--hair)' : 'var(--primary)'; }
+}
+
+function _mlSetState(state) {
+  $('ml-empty-state').style.display   = state === 'empty'   ? 'flex' : 'none';
+  $('ml-loading-state').style.display = state === 'loading' ? 'flex' : 'none';
+  $('ml-error-state').style.display   = state === 'error'   ? 'block': 'none';
+  $('ml-results').style.display       = state === 'results' ? 'block': 'none';
+}
+
+function _destroyMlCharts() {
+  if (_mlTempChart)    { _mlTempChart.destroy();    _mlTempChart    = null; }
+  if (_mlHumChart)     { _mlHumChart.destroy();     _mlHumChart     = null; }
+  if (_mlAnomalyChart) { _mlAnomalyChart.destroy(); _mlAnomalyChart = null; }
+  if (_mlKmeansChart)  { _mlKmeansChart.destroy();  _mlKmeansChart  = null; }
+}
+
+function _mlChartDefaults() {
+  return {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: 'var(--ink-2)', font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: 'var(--hair)' } },
+      y: { ticks: { color: 'var(--ink-2)', font: { size: 10 } }, grid: { color: 'var(--hair)' } },
+    },
+  };
+}
+
+function renderMlResults(d) {
+  _destroyMlCharts();
+
+  // Summary cards
+  setText('ml-stat-temp',         d.temp_avg + '°C');
+  setText('ml-stat-anomaly',      d.anomaly.count ?? '—');
+  setText('ml-stat-count',        d.record_count + ' Valid');
+  const fcastMax = d.temp_forecast.forecast ? Math.max(...d.temp_forecast.forecast).toFixed(2) : '—';
+  setText('ml-stat-forecast-max', fcastMax + '°C');
+
+  // ── 1. Forecasting Suhu ───────────────────────────────────
+  const n = d.temps.length;
+  const xLabels = d.timestamps.map((ts, i) => {
+    if (!ts) return i;
+    try { return new Date(ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }); } catch { return i; }
+  });
+  const futureLabels = Array.from({ length: d.temp_forecast.forecast?.length || 0 }, (_, i) => 'P' + (i + 1));
+
+  _mlTempChart = new Chart($('ml-chart-temp-forecast'), {
+    type: 'line',
+    data: {
+      labels: [...xLabels, ...futureLabels],
+      datasets: [
+        { label: 'Suhu Valid (°C)',       data: [...d.temps, ...Array(futureLabels.length).fill(null)], borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,.08)', tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+        { label: 'Fitted (°C)',           data: [...(d.temp_forecast.fitted||[]), ...Array(futureLabels.length).fill(null)], borderColor: '#a78bfa', borderDash: [4,3], tension: 0, pointRadius: 0, borderWidth: 1.5 },
+        { label: 'Prediksi Masa Depan',  data: [...Array(n).fill(null), ...(d.temp_forecast.forecast||[])], borderColor: '#f97316', borderDash: [6,3], tension: 0.2, pointRadius: 3, borderWidth: 2 },
+      ],
+    },
+    options: { ..._mlChartDefaults(), plugins: { legend: { display: true, labels: { color: 'var(--ink-2)', font: { size: 10 }, boxWidth: 12 } } } },
+  });
+
+  // ── 2. Forecasting Kelembaban ─────────────────────────────
+  _mlHumChart = new Chart($('ml-chart-hum-forecast'), {
+    type: 'line',
+    data: {
+      labels: [...xLabels, ...futureLabels],
+      datasets: [
+        { label: 'Kelembaban Valid (%)',   data: [...d.hums, ...Array(futureLabels.length).fill(null)], borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,.08)', tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+        { label: 'Prediksi Masa Depan (%)',data: [...Array(n).fill(null), ...(d.hum_forecast.forecast||[])], borderColor: '#f97316', borderDash: [6,3], tension: 0.2, pointRadius: 3, borderWidth: 2 },
+      ],
+    },
+    options: { ..._mlChartDefaults(), plugins: { legend: { display: true, labels: { color: 'var(--ink-2)', font: { size: 10 }, boxWidth: 12 } } } },
+  });
+
+  // ── 3. Anomaly Detection ──────────────────────────────────
+  const anomIdx = new Set(d.anomaly.anomaly_indices || []);
+  const anomData = d.temps.map((t, i) => ({ x: i, y: t }));
+  _mlAnomalyChart = new Chart($('ml-chart-anomaly'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'Suhu Normal',  data: anomData.filter((_, i) => !anomIdx.has(i)), backgroundColor: 'rgba(6,182,212,.6)',  pointRadius: 3 },
+        { label: 'Suhu Anomali', data: anomData.filter((_, i) =>  anomIdx.has(i)), backgroundColor: 'rgba(252,68,68,.8)', pointRadius: 5 },
+      ],
+    },
+    options: { ..._mlChartDefaults(), plugins: { legend: { display: true, labels: { color: 'var(--ink-2)', font: { size: 10 }, boxWidth: 10 } } } },
+  });
+
+  // ── 4. K-Means ────────────────────────────────────────────
+  const colorMap = { 'Profil Dingin': 'rgba(59,130,246,.7)', 'Profil Optimal': 'rgba(16,185,129,.7)', 'Profil Panas': 'rgba(239,68,68,.7)' };
+  const kLabels  = d.kmeans.labels || [];
+  const kDatasets = ['Profil Dingin', 'Profil Optimal', 'Profil Panas'].map(profile => ({
+    label: profile,
+    data:  d.temps.map((t, i) => kLabels[i] === profile ? { x: t, y: d.hums[i] } : null).filter(Boolean),
+    backgroundColor: colorMap[profile],
+    pointRadius: 4,
+  }));
+  _mlKmeansChart = new Chart($('ml-chart-kmeans'), {
+    type: 'scatter',
+    data: { datasets: kDatasets },
+    options: {
+      ..._mlChartDefaults(),
+      scales: {
+        x: { title: { display: true, text: 'Suhu (°C)', color: 'var(--ink-2)', font: { size: 10 } }, ticks: { color: 'var(--ink-2)', font: { size: 10 } }, grid: { color: 'var(--hair)' } },
+        y: { title: { display: true, text: 'Kelembaban (%)', color: 'var(--ink-2)', font: { size: 10 } }, ticks: { color: 'var(--ink-2)', font: { size: 10 } }, grid: { color: 'var(--hair)' } },
+      },
+      plugins: { legend: { display: true, labels: { color: 'var(--ink-2)', font: { size: 10 }, boxWidth: 10 } } },
+    },
+  });
+
+  // K-Means legend stats
+  const legendEl = $('ml-kmeans-legend');
+  if (legendEl) {
+    legendEl.innerHTML = Object.entries(d.kmeans.cluster_stats || {}).map(([name, s]) =>
+      `<span style="color:${colorMap[name] || 'inherit'};font-weight:600;">${name}</span>: ${s.count} data · ${s.temp_avg}°C · ${s.hum_avg}%`
+    ).join(' &nbsp;|&nbsp; ');
+  }
+
+  // ── XAI: SHAP ─────────────────────────────────────────────
+  const shap = d.shap || {};
+  if (shap.hi_baseline != null) setText('ml-shap-baseline', shap.hi_baseline + '°C');
+  const tImpact = shap.temp_impact ?? 0, hImpact = shap.hum_impact ?? 0;
+  const tEl = $('ml-shap-temp'), hEl = $('ml-shap-hum');
+  if (tEl) { tEl.textContent = (tImpact >= 0 ? '+' : '') + tImpact + '°C'; tEl.style.color = tImpact > 0 ? 'var(--crit)' : 'var(--emerald)'; }
+  if (hEl) { hEl.textContent = (hImpact >= 0 ? '+' : '') + hImpact + '°C'; hEl.style.color = hImpact > 0 ? 'var(--amber)' : 'var(--emerald)'; }
+  setText('ml-shap-temp-label', shap.temp_label || '');
+  setText('ml-shap-hum-label', shap.hum_label || '');
+  const dominant = d.kmeans.dominant || '';
+  setText('ml-shap-conclusion', dominant
+    ? `Kesimpulan SHAP: Suhu aktual terbukti menjadi faktor yang paling memengaruhi kondisi ruangan. Profil dominan: ${dominant}.`
+    : '');
+
+  // ── XAI: AI Insights via /api/chat ───────────────────────
+  setText('ml-ai-insights', 'Memuat insight dari AI...');
+  setText('ml-ai-recommendation', 'Memuat rekomendasi...');
+  const prompt = `Kamu adalah asisten klinis AI untuk MediClimate RS. Berikan HANYA 2 bagian jawaban:
+
+BAGIAN 1 — AI INSIGHTS (2-3 kalimat):
+Data ML menunjukkan: rata-rata suhu ${d.temp_avg}°C, ${d.anomaly.count} anomali terdeteksi dari ${d.record_count} data, tren suhu ${(d.temp_forecast.coef||0) > 0 ? 'naik' : 'turun'} (koef ${(d.temp_forecast.coef||0).toFixed(3)}), profil dominan "${dominant}". Berikan analisis kondisi ruangan ini dari perspektif klinis untuk pasien bayi/neonatal.
+
+BAGIAN 2 — REKOMENDASI (2-3 kalimat):
+Berdasarkan data di atas, berikan rekomendasi tindakan konkret yang harus dilakukan tenaga medis.
+
+Format jawaban:
+INSIGHTS: [isi insights di sini]
+REKOMENDASI: [isi rekomendasi di sini]
+
+Gunakan bahasa Indonesia yang profesional namun mudah dipahami perawat.`;
+
+  fetch(CONFIG.API_BASE_URL + '/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: prompt, history: [] }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      const reply = data.reply || '';
+      const insightMatch = reply.match(/INSIGHTS:\s*([\s\S]*?)(?=REKOMENDASI:|$)/i);
+      const rekoMatch    = reply.match(/REKOMENDASI:\s*([\s\S]*?)$/i);
+      setText('ml-ai-insights',        insightMatch ? insightMatch[1].trim() : reply);
+      setText('ml-ai-recommendation',  rekoMatch    ? rekoMatch[1].trim()   : 'Tidak ada rekomendasi khusus saat ini.');
+    })
+    .catch(() => {
+      setText('ml-ai-insights',       'AI tidak tersedia saat ini.');
+      setText('ml-ai-recommendation', 'Periksa koneksi dan coba lagi.');
+    });
+
+  _mlSetState('results');
+  switchMlTab('predictive');
+}
+
+async function runMlAnalysis() {
+  _mlSetState('loading');
+  const btn = $('btn-start-analysis');
+  if (btn) { btn.disabled = true; btn.textContent = 'Menganalisis...'; }
+
+  const params = new URLSearchParams({ range: State.mlRange });
+  if (State.mlRoom) params.set('device_id', State.mlRoom);
+
+  try {
+    const res  = await fetch(CONFIG.API_BASE_URL + '/api/analytics?' + params.toString());
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      $('ml-error-msg').textContent = data.error || 'Gagal menghubungi server.';
+      _mlSetState('error');
+    } else {
+      renderMlResults(data);
+    }
+  } catch (e) {
+    $('ml-error-msg').textContent = 'Koneksi ke server gagal: ' + e.message;
+    _mlSetState('error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Start Analysis'; }
+  }
+}
+window.runMlAnalysis  = runMlAnalysis;
+window.switchMlTab    = switchMlTab;
 
 function switchRoom(btn, roomId) {
   State.selectedRoom = roomId || null;
@@ -1192,7 +1499,8 @@ function showApp(mode, user=null) {
     $$('.sidebar-nav .nav-item').forEach(btn => btn.style.display = 'flex');
     if ($('btn-export-csv')) $('btn-export-csv').style.display = 'flex';
     if ($('chat-fab')) $('chat-fab').style.display = 'flex';
-    
+    _initBrowserNotif(); // prompt perawat untuk enable notifikasi
+
     if ($('sidebar-user')) {
       $('sidebar-user').style.display = 'block';
       $('user-email-text').textContent = user ? user.email : 'Internal Staff';
@@ -1311,6 +1619,9 @@ async function fetchSensorStatus() {
 
     // Render room status grid di dashboard
     renderRoomGrid(data);
+
+    // ── Browser push notification saat status sensor berubah ──
+    data.forEach(_checkPushNotifForSensor);
 
     // ── Refresh stale banner sesuai status sensor terpilih saat ini ──
     if (State.selectedRoom && State.latestTemp != null) {

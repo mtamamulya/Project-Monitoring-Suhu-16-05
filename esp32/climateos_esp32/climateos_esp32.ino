@@ -38,6 +38,8 @@
 #define LCD_ADDR  0x27
 #define LCD_COLS  20
 #define LCD_ROWS  4
+#define LCD_SDA   21   // D16
+#define LCD_SCL   22   // D17
 LiquidCrystal_I2C lcd(LCD_ADDR, LCD_COLS, LCD_ROWS);
 
 // ── Custom Character (Ikon Termometer & Tetes) ─
@@ -87,7 +89,7 @@ byte iconDegree[8] = {
 
 // Pin dan tipe sensor
 #define DHT_PIN          4
-#define DHT_TYPE         DHT11   // Ganti ke DHT11 jika pakai DHT11
+#define DHT_TYPE         DHT22   // Ganti ke DHT11 jika pakai DHT11
 
 // Interval pengiriman data (dalam milidetik)
 // Default: 15 detik — sesuai polling interval dashboard
@@ -101,7 +103,7 @@ byte iconDegree[8] = {
 DHT dht(DHT_PIN, DHT_TYPE);
 
 // ── Status LED bawaan ESP32 (GPIO 2) ─────────────────────────
-#define LED_PIN 2
+#define LED_PIN 2                 
 
 // ── Variabel global ───────────────────────────────────────────
 unsigned long lastSendTime = 0;
@@ -292,7 +294,8 @@ void setup() {
   dht.begin();
   Serial.println("[Sensor] DHT22 diinisialisasi pada GPIO " + String(DHT_PIN));
 
-  // Inisialisasi LCD
+  // Inisialisasi LCD — pakai SDA=D16, SCL=D17 (bukan pin I2C default)
+  Wire.begin(LCD_SDA, LCD_SCL);
   lcd.init();
   lcd.backlight();
 
