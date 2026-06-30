@@ -533,18 +533,20 @@
     /* ── ML Analytics tab buttons ── */
     .btn-tab {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 16px; border-radius: 8px;
-      font-size: 13px; font-weight: 600; cursor: pointer;
-      border: 1px solid var(--hair); background: transparent;
-      color: var(--muted); transition: all 0.14s ease;
+      padding: 8px 18px; border-radius: 8px;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      border: 1.5px solid transparent; background: transparent;
+      color: var(--muted-2); transition: all 0.14s ease;
       font-family: 'Geist', sans-serif;
     }
-    .btn-tab:hover  { color: var(--ink-2); background: var(--bg-2); border-color: var(--muted-2); }
-    .btn-tab:active { transform: scale(0.97) translateY(1px); opacity: 0.8; }
+    .btn-tab:hover  { color: var(--ink-2); background: var(--bg-2); }
+    .btn-tab:active { transform: scale(0.97) translateY(1px); opacity: 0.75; }
     .btn-tab.active {
-      background: var(--ink); color: var(--bg);
-      border-color: var(--ink);
-      box-shadow: 0 1px 4px rgba(10,10,11,0.22);
+      background: var(--card);
+      color: var(--ink);
+      font-weight: 700;
+      border-color: var(--muted-2);
+      box-shadow: var(--shadow-sm);
     }
 
     /* ── Stat card ── */
