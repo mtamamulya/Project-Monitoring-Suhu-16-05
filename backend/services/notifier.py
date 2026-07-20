@@ -135,7 +135,10 @@ def process_alert(temperature: float, humidity: float, device_id: str):
     should_send = False
     last_sent = datetime.fromisoformat(state["last_alert_sent_at"]) if state.get("last_alert_sent_at") else None
 
-    if condition_level > 0 and (state["level"] != condition_level):
+    # Menggunakan state.get("level", 0) agar tidak terjadi KeyError jika field 'level' belum ada di dokumen Firestore
+    current_level = state.get("level", 0)
+
+    if condition_level > 0 and (current_level != condition_level):
         should_send = True
     elif condition_level > 0 and last_sent:
         elapsed = (now - last_sent).total_seconds() / 60.0
@@ -149,8 +152,8 @@ def process_alert(temperature: float, humidity: float, device_id: str):
         should_send = True
 
     # ── RESOLVED ──────────────────────────────────────────────────
-    if condition_level == 0 and state["level"] > 0:
-        prev_level = state["level"]
+    if condition_level == 0 and current_level > 0:
+        prev_level = current_level
         tg_msg = (
             f"✅ <b>RESOLVED</b> — {room['name']}\n"
             f"Suhu dan Kelembaban kembali normal.\n"
@@ -185,7 +188,7 @@ def process_alert(temperature: float, humidity: float, device_id: str):
         return
 
     # ── UPDATE STATE ───────────────────────────────────────────────
-    prev_level = state.get("level", 0)
+    prev_level = current_level
     state["level"] = condition_level
     _alert_states[device_id] = state
 
