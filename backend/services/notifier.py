@@ -3,14 +3,15 @@ import os
 import requests
 from datetime import datetime, timezone, timedelta
 
+from services.config import ROOM_CONFIG  # single source of truth — dinamis dari Firestore, lihat services/config.py
+from services import alerts_log
+
 logger = logging.getLogger(__name__)
 
-ROOM_CONFIG = {
-    "NICU-01":    {"name": "NICU",              "floor": "Lt. 2", "tempMin": 24.0, "tempMax": 26.0, "humMin": 50.0, "humMax": 60.0},
-    "BANGSAL-A":  {"name": "Bangsal Bayi",      "floor": "Lt. 2", "tempMin": 22.0, "tempMax": 26.0, "humMin": 45.0, "humMax": 60.0},
-    "BANGSAL-B":  {"name": "Bangsal Anak Umum", "floor": "Lt. 3", "tempMin": 20.0, "tempMax": 24.0, "humMin": 40.0, "humMax": 60.0},
-    "ISOLASI-01": {"name": "Ruang Isolasi",     "floor": "Lt. 3", "tempMin": 22.0, "tempMax": 25.0, "humMin": 45.0, "humMax": 55.0},
-}
+# Berapa derajat di luar threshold ruangan yang dianggap darurat mutlak (Level 3),
+# terlepas dari berapa lama kondisi sudah berlangsung. Relatif terhadap tempMin/tempMax
+# tiap ruangan (BUKAN angka tetap) supaya tidak salah trigger kalau threshold ruangan beda-beda.
+EMERGENCY_DELTA_C = 5.0
 
 _alert_states = {}
 _state_loaded = False
@@ -55,20 +56,6 @@ def _send_discord_embed(webhook_url: str, embed: dict):
     except Exception as e:
         logger.error(f"Discord send error: {e}")
 
-def _send_whatsapp(token, target, message):
-    """Send WhatsApp message via Fonnte API."""
-    if not token or not target:
-        return
-    try:
-        requests.post(
-            "https://api.fonnte.com/send",
-            headers={"Authorization": token},
-            data={"target": target, "message": message},
-            timeout=10
-        )
-    except Exception as e:
-        logger.error(f"WhatsApp send error: {e}")
-
 def get_deviations(temp, hum, room_conf):
     d_temp = 0.0
     if temp < room_conf['tempMin']: d_temp = room_conf['tempMin'] - temp
@@ -87,13 +74,12 @@ def process_alert(temperature: float, humidity: float, device_id: str):
     now = datetime.now(timezone.utc)
     room = ROOM_CONFIG[device_id]
 
+    # Telegram -> suster jaga (+ direktur untuk eskalasi). Discord -> tim teknisi (pemantauan internal).
+    # WhatsApp/Fonnte tidak lagi dipakai — 2 jalur ini + alarm native website sudah cukup.
     tg_token    = os.environ.get("TELEGRAM_BOT_TOKEN")
     tg_perawat  = os.environ.get("TELEGRAM_CHAT_ID_PERAWAT")
     tg_direktur = os.environ.get("TELEGRAM_CHAT_ID_DIREKTUR")
     discord_url = os.environ.get("DISCORD_WEBHOOK_URL")
-    wa_token    = os.environ.get("FONNTE_TOKEN")
-    wa_perawat  = os.environ.get("WA_CHAT_ID_PERAWAT")
-    wa_direktur = os.environ.get("WA_CHAT_ID_DIREKTUR")
     now_wib = datetime.now(WIB).strftime("%H:%M:%S WIB")
 
     state = _alert_states.get(device_id, {
@@ -105,8 +91,12 @@ def process_alert(temperature: float, humidity: float, device_id: str):
 
     d_temp, d_hum = get_deviations(temperature, humidity, room)
 
+    # FIX: dulu ambang darurat mutlak ini angka tetap (>=32 / <=18), yang cocok untuk
+    # threshold ruangan lama (~20-26C) tapi SALAH untuk range RSND 15-25C — 18C masih
+    # valid (di atas tempMin 15C) tapi bakal ketriger Emergency palsu. Sekarang dihitung
+    # relatif terhadap tempMin/tempMax masing-masing ruangan (EMERGENCY_DELTA_C di atas).
     condition_level = 0
-    if temperature >= 32.0 or temperature <= 18.0:
+    if temperature <= room["tempMin"] - EMERGENCY_DELTA_C or temperature >= room["tempMax"] + EMERGENCY_DELTA_C:
         condition_level = 3
     elif d_temp > 2.0 or d_hum > 10.0:
         condition_level = 2
@@ -160,18 +150,10 @@ def process_alert(temperature: float, humidity: float, device_id: str):
             f"Suhu: {temperature}°C | Humidity: {humidity}%\n"
             f"Waktu: {now_wib}"
         )
-        wa_msg = (
-            f"✅ *RESOLVED* — {room['name']}\n"
-            f"Suhu dan Kelembaban kembali normal.\n"
-            f"Suhu: {temperature}°C | Humidity: {humidity}%\n"
-            f"Waktu: {now_wib}"
-        )
         send_telegram(tg_token, tg_perawat, tg_msg)
-        _send_whatsapp(wa_token, wa_perawat, wa_msg)
         if prev_level >= 3:
             send_telegram(tg_token, tg_direktur, tg_msg)
-            _send_whatsapp(wa_token, wa_direktur, wa_msg)
-        if prev_level == 1 and discord_url:
+        if discord_url:
             embed_resolved = {
                 "title": f"✅ RESOLVED — {room['name']}",
                 "description": f"Kondisi kembali normal. Suhu: {temperature}°C | Humidity: {humidity}%",
@@ -179,6 +161,10 @@ def process_alert(temperature: float, humidity: float, device_id: str):
                 "footer": {"text": f"MediClimate RS • {now_wib}"}
             }
             _send_discord_embed(discord_url, embed_resolved)
+
+        _log_alert(device_id, room["name"], 0, "RESOLVED",
+                    f"Kondisi kembali normal. Suhu: {temperature}°C | Humidity: {humidity}%",
+                    temperature, humidity)
 
         state["level"] = 0
         state["last_alert_sent_at"] = None
@@ -197,19 +183,17 @@ def process_alert(temperature: float, humidity: float, device_id: str):
         _save_state(device_id, state)
 
         if condition_level == 1:
-            # L1 → Discord + WA Perawat
-            wa_msg = (
-                f"⚠️ *WARNING* — {room['name']}\n"
+            # L1 → Discord (tim teknisi)
+            level_msg = (
                 f"Suhu/Humidity di luar batas normal.\n"
                 f"Suhu: {temperature}°C (Limit: {room['tempMin']}-{room['tempMax']}°C)\n"
                 f"Humidity: {humidity}% (Limit: {room['humMin']}-{room['humMax']}%)\n"
                 f"Waktu: {now_wib}"
             )
-            _send_whatsapp(wa_token, wa_perawat, wa_msg)
             if discord_url:
                 embed = {
                     "title": f"⚠️ WARNING — {room['name']}",
-                    "description": f"Suhu/Humidity di luar batas normal.",
+                    "description": "Suhu/Humidity di luar batas normal.",
                     "color": 0xF6E05E,
                     "fields": [
                         {"name": "Suhu",     "value": f"{temperature}°C (Limit: {room['tempMin']}-{room['tempMax']})", "inline": True},
@@ -220,42 +204,30 @@ def process_alert(temperature: float, humidity: float, device_id: str):
                 _send_discord_embed(discord_url, embed)
             else:
                 logger.warning("DISCORD_WEBHOOK_URL not set — sending L1 to Telegram Perawat instead")
-                tg_msg = (
-                    f"⚠️ <b>WARNING</b> — {room['name']}\n"
-                    f"Suhu/Humidity di luar batas normal.\n"
-                    f"Suhu: {temperature}°C (Limit: {room['tempMin']}-{room['tempMax']}°C)\n"
-                    f"Humidity: {humidity}% (Limit: {room['humMin']}-{room['humMax']}%)\n"
-                    f"Waktu: {now_wib}"
-                )
-                send_telegram(tg_token, tg_perawat, tg_msg)
+                send_telegram(tg_token, tg_perawat, f"⚠️ <b>WARNING</b> — {room['name']}\n{level_msg}")
+
+            _log_alert(device_id, room["name"], 1, "WARNING", level_msg, temperature, humidity)
 
         elif condition_level == 2:
-            # L2 → Telegram Perawat + WA Perawat
-            tg_msg = (
-                f"🚨 <b>CRITICAL ALERT</b> — {room['name']}\n"
+            # L2 → Telegram Perawat
+            level_msg = (
                 f"Suhu: {temperature}°C (threshold: {room['tempMin']}-{room['tempMax']}°C)\n"
                 f"Humidity: {humidity}% (threshold: {room['humMin']}-{room['humMax']}%)\n"
                 f"Device: {device_id}\n"
                 f"Waktu: {now_wib}\n"
                 f"Segera periksa kondisi ruangan."
             )
-            wa_msg = (
-                f"🚨 *CRITICAL ALERT* — {room['name']}\n"
-                f"Suhu: {temperature}°C (threshold: {room['tempMin']}-{room['tempMax']}°C)\n"
-                f"Humidity: {humidity}% (threshold: {room['humMin']}-{room['humMax']}%)\n"
-                f"Device: {device_id}\n"
-                f"Waktu: {now_wib}\n"
-                f"Segera periksa kondisi ruangan."
-            )
-            send_telegram(tg_token, tg_perawat, tg_msg)
-            _send_whatsapp(wa_token, wa_perawat, wa_msg)
+            send_telegram(tg_token, tg_perawat, f"🚨 <b>CRITICAL ALERT</b> — {room['name']}\n{level_msg}")
+            _log_alert(device_id, room["name"], 2, "CRITICAL", level_msg, temperature, humidity)
 
         elif condition_level == 3:
-            # L3 → Telegram Direktur + WA Perawat + WA Direktur
-            status_text = "ESKALASI L2 (TIDAK RESOLVED > 15 MENIT)" if state.get("escalated_to_emergency") else "SUHU KRITIS (>=32 atau <=18)"
-            tg_msg = (
-                f"🔴 <b>EMERGENCY</b> — {room['name']}\n"
-                f"⚠️ <b>PERHATIAN SEGERA DIPERLUKAN</b>\n"
+            # L3 → Telegram Direktur
+            status_text = (
+                "ESKALASI L2 (TIDAK RESOLVED > 15 MENIT)" if state.get("escalated_to_emergency")
+                else f"SUHU KRITIS (di luar {room['tempMin']}-{room['tempMax']}C +/- {EMERGENCY_DELTA_C}C)"
+            )
+            level_msg = (
+                f"⚠️ PERHATIAN SEGERA DIPERLUKAN\n"
                 f"Suhu: {temperature}°C (threshold: {room['tempMin']}-{room['tempMax']}°C)\n"
                 f"Humidity: {humidity}% (threshold: {room['humMin']}-{room['humMax']}%)\n"
                 f"Device: {device_id}\n"
@@ -263,22 +235,32 @@ def process_alert(temperature: float, humidity: float, device_id: str):
                 f"Status: {status_text}\n"
                 f"Hubungi teknisi dan kepala perawat segera."
             )
-            wa_msg = (
-                f"🔴 *EMERGENCY* — {room['name']}\n"
-                f"⚠️ *PERHATIAN SEGERA DIPERLUKAN*\n"
-                f"Suhu: {temperature}°C (threshold: {room['tempMin']}-{room['tempMax']}°C)\n"
-                f"Humidity: {humidity}% (threshold: {room['humMin']}-{room['humMax']}%)\n"
-                f"Device: {device_id}\n"
-                f"Waktu: {now_wib}\n"
-                f"Status: {status_text}\n"
-                f"Hubungi teknisi dan kepala perawat segera."
-            )
-            send_telegram(tg_token, tg_direktur, tg_msg)
-            _send_whatsapp(wa_token, wa_perawat, wa_msg)
-            _send_whatsapp(wa_token, wa_direktur, wa_msg)
+            send_telegram(tg_token, tg_direktur, f"🔴 <b>EMERGENCY</b> — {room['name']}\n{level_msg}")
+            if discord_url:
+                _send_discord_embed(discord_url, {
+                    "title": f"🔴 EMERGENCY — {room['name']}",
+                    "description": level_msg.replace("\n", "  \n"),
+                    "color": 0xE53E3E,
+                    "footer": {"text": f"MediClimate RS • {now_wib}"}
+                })
+            _log_alert(device_id, room["name"], 3, "EMERGENCY", level_msg, temperature, humidity)
 
     elif prev_level != condition_level:
         _save_state(device_id, state)
+
+
+def _log_alert(device_id: str, room_name: str, level: int, level_label: str, message: str,
+                temperature: float, humidity: float) -> None:
+    """Catat alert ke alerts_log (dipakai notification bell di website)."""
+    try:
+        from firebase_admin import firestore
+        db = firestore.client()
+    except Exception:
+        db = None
+    try:
+        alerts_log.add_alert(db, device_id, room_name, level, level_label, message, temperature, humidity)
+    except Exception as exc:
+        logger.warning("Gagal catat alert log: %s", exc)
 
 
 def check_offline_sensors():
@@ -288,8 +270,6 @@ def check_offline_sensors():
 
     tg_token    = os.environ.get("TELEGRAM_BOT_TOKEN")
     tg_direktur = os.environ.get("TELEGRAM_CHAT_ID_DIREKTUR")
-    wa_token    = os.environ.get("FONNTE_TOKEN")
-    wa_direktur = os.environ.get("WA_CHAT_ID_DIREKTUR")
 
     if not tg_token or not tg_direktur:
         logger.warning("Telegram Direktur config missing, skip offline check")
@@ -323,16 +303,10 @@ def check_offline_sensors():
                 f"Waktu deteksi: {now_wib}\n"
                 f"Periksa koneksi sensor dan WiFi segera."
             )
-            wa_msg = (
-                f"🔴 *SENSOR OFFLINE* — {room['name']}\n"
-                f"⚠️ Sensor tidak mengirim data > {offline_mins} menit\n"
-                f"Device: {device_id}\n"
-                f"Data terakhir: {last_wib}\n"
-                f"Waktu deteksi: {now_wib}\n"
-                f"Periksa koneksi sensor dan WiFi segera."
-            )
             send_telegram(tg_token, tg_direktur, tg_msg)
-            _send_whatsapp(wa_token, wa_direktur, wa_msg)
+            _log_alert(device_id, room["name"], 2, "OFFLINE",
+                        f"Sensor tidak mengirim data > {offline_mins} menit. Data terakhir: {last_wib}",
+                        None, None)
             logger.info(f"Offline alert sent for {device_id}")
 
             state["offline_notified"] = True
@@ -346,13 +320,8 @@ def check_offline_sensors():
                 f"Sensor {device_id} kembali aktif.\n"
                 f"Waktu: {now_wib}"
             )
-            wa_msg = (
-                f"✅ *SENSOR ONLINE* — {room['name']}\n"
-                f"Sensor {device_id} kembali aktif.\n"
-                f"Waktu: {now_wib}"
-            )
             send_telegram(tg_token, tg_direktur, tg_msg)
-            _send_whatsapp(wa_token, wa_direktur, wa_msg)
+            _log_alert(device_id, room["name"], 0, "ONLINE", f"Sensor {device_id} kembali aktif.", None, None)
             logger.info(f"Online recovery sent for {device_id}")
 
             state["offline_notified"] = False

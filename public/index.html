@@ -868,6 +868,21 @@
           </svg>
           ML Analytics
         </button>
+        <button class="nav-item" data-page="kepatuhan">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Kepatuhan
+        </button>
+
+        <div class="nav-label" style="margin-top: 8px;">Admin</div>
+        <button class="nav-item" data-page="admin">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          Setting
+        </button>
 
         <div class="nav-label" style="margin-top: 8px;">System</div>
         <button class="nav-item" id="sidebar-theme-btn">
@@ -937,6 +952,25 @@
             </svg>
             Aktifkan Notif
           </button>
+          <button id="btn-alarm-sound" class="btn-ghost no-print" style="display:none; align-items:center; gap:5px; font-size:12px; padding:5px 10px;" title="Aktifkan suara alarm di website" onclick="window.enableAlarmSound()">
+            <svg style="width:14px;height:14px;flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z"/>
+              <line x1="1" y1="1" x2="23" y2="23" stroke-linecap="round"/>
+            </svg>
+            Aktifkan Suara
+          </button>
+          <div class="no-print" style="position: relative;">
+            <button id="btn-notif-bell" class="theme-toggle btn-icon" title="Notifikasi" aria-label="Notifikasi" onclick="window.toggleNotifBell()" style="position: relative;">
+              <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+              </svg>
+              <span id="notif-bell-badge" style="display:none; position:absolute; top:2px; right:2px; min-width:15px; height:15px; padding:0 3px; border-radius:8px; background:var(--crit); color:#fff; font-size:9.5px; font-weight:700; align-items:center; justify-content:center; line-height:1;"></span>
+            </button>
+            <div id="notif-bell-panel" style="display:none; position:absolute; right:0; top:calc(100% + 8px); width:320px; max-width:85vw; background:var(--card); border:1px solid var(--hair); border-radius:12px; box-shadow:var(--shadow-lg); z-index:60; overflow:hidden;">
+              <div style="padding:12px 14px; border-bottom:1px solid var(--hair); font-weight:600; font-size:13px; color:var(--ink);">Notifikasi</div>
+              <div id="notif-bell-list" style="max-height:360px; overflow-y:auto;"></div>
+            </div>
+          </div>
           <button id="btn-theme" class="theme-toggle btn-icon no-print" title="Toggle theme" aria-label="Toggle theme">
             <svg class="sun-icon" style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="4"/>
@@ -969,12 +1003,18 @@
             </div>
           </div>
 
-          <!-- Room Switcher -->
-          <div id="dashboard-room-switcher" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
-            <!-- Populated by app.js after ROOM_CONFIG is fetched -->
-            <span class="label" style="margin-right: 4px;">Ruangan:</span>
-            <button class="seg-btn active" data-room="" onclick="window.switchRoom(this, '')">Semua</button>
+          <!-- Breadcrumb kembali — hanya tampil saat sedang lihat detail 1 ruangan -->
+          <div id="dashboard-room-switcher" style="display: none; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+            <button class="btn-ghost" style="font-size: 13px; padding: 6px 12px;" onclick="window.backToOverview()">
+              <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+              Semua Ruangan
+            </button>
+            <span style="color: var(--muted-2);">/</span>
+            <span id="dashboard-detail-room-name" class="label-strong" style="font-size: 14px;">—</span>
           </div>
+
+          <!-- ══ DETAIL 1 RUANGAN — muncul setelah klik kartu di overview ══ -->
+          <div id="dashboard-detail" style="display: none;">
 
           <!-- Bento grid -->
           <div class="bento-grid" style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 16px; margin-bottom: 16px;">
@@ -1176,18 +1216,27 @@
             </div>
           </div>
 
-          <!-- ══ STATUS SEMUA RUANGAN ══ -->
-          <div style="margin-top: 20px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-              <span class="label-strong">Status Semua Ruangan</span>
-              <div id="offline-warning-banner" style="display: none; background: var(--crit-soft); color: var(--crit); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; align-items: center; gap: 6px; border: 1px solid oklch(0.85 0.10 28);">
-                ⚠ <span id="offline-warning-text">Ada sensor offline</span>
+          </div>
+          <!-- ══ /DETAIL 1 RUANGAN ══ -->
+
+          <!-- ══ OVERVIEW — landing utama dashboard, tampil default ══ -->
+          <div id="dashboard-overview">
+            <div style="margin-top: 4px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div>
+                  <span class="label-strong">Semua Ruangan</span>
+                  <p class="text-muted" style="font-size: 12.5px; margin-top: 2px;">Klik salah satu kartu untuk lihat detail & grafik real-time ruangan tersebut.</p>
+                </div>
+                <div id="offline-warning-banner" style="display: none; background: var(--crit-soft); color: var(--crit); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; align-items: center; gap: 6px; border: 1px solid oklch(0.85 0.10 28);">
+                  ⚠ <span id="offline-warning-text">Ada sensor offline</span>
+                </div>
+              </div>
+              <div id="room-status-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
+                <!-- Rendered by app.js via renderRoomGrid() -->
               </div>
             </div>
-            <div id="room-status-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
-              <!-- Rendered by app.js via renderRoomGrid() -->
-            </div>
           </div>
+          <!-- ══ /OVERVIEW ══ -->
 
         </div>
 
@@ -1208,7 +1257,13 @@
                 <button class="seg-btn" data-range="6h">6h</button>
                 <button class="seg-btn" data-range="12h">12h</button>
                 <button class="seg-btn" data-range="24h">24h</button>
+                <button class="seg-btn" data-range="7d">7 Hari</button>
+                <button class="seg-btn" data-range="30d">30 Hari</button>
               </div>
+              <button id="btn-history-custom-range" class="btn-ghost no-print" style="font-size: 13px; padding: 6px 10px;" title="Pilih rentang tanggal bebas (untuk akreditasi)">
+                <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                Tanggal Custom
+              </button>
               <button id="btn-history-pdf" class="btn-primary no-print">
                 <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Download PDF
@@ -1218,6 +1273,20 @@
                 CSV
               </button>
             </div>
+          </div>
+
+          <!-- Date-range picker (rentang bebas — untuk tarik data akreditasi, mis. 1 bulan) -->
+          <div id="history-custom-range-panel" class="card no-print" style="display:none; padding: 14px 16px; margin-bottom: 16px; align-items: flex-end; gap: 12px; flex-wrap: wrap;">
+            <div>
+              <label class="label" style="display:block; margin-bottom: 4px;">Dari Tanggal</label>
+              <input type="date" id="history-range-start" class="input" style="font-size: 13px; padding: 6px 10px; height: auto;" />
+            </div>
+            <div>
+              <label class="label" style="display:block; margin-bottom: 4px;">Sampai Tanggal</label>
+              <input type="date" id="history-range-end" class="input" style="font-size: 13px; padding: 6px 10px; height: auto;" />
+            </div>
+            <button id="btn-history-range-apply" class="btn-primary" style="font-size: 13px; padding: 7px 14px;">Terapkan</button>
+            <span id="history-range-hint" class="text-muted" style="font-size: 11.5px;">Wajib pilih 1 ruangan spesifik dulu (bukan "Semua Ruangan"). Maks. 60 hari per permintaan.</span>
           </div>
 
           <!-- Summary row for history -->
@@ -1657,6 +1726,188 @@
 
           </div><!-- /ml-results -->
         </div><!-- /page-ml-analytics -->
+
+        <!-- ════════ PAGE: ADMIN SETTING ════════ -->
+        <div id="page-admin" class="page">
+          <div style="margin-bottom: 20px;">
+            <h1 style="font-size: 24px; font-weight: 600; letter-spacing: -0.022em; color: var(--ink); margin: 0;">Pengaturan Sistem</h1>
+            <p class="text-muted" style="font-size: 13px; margin-top: 4px;">Threshold ruangan, daftar verifikator, dan riwayat perubahan — semua tersimpan langsung ke server, tidak perlu deploy ulang.</p>
+          </div>
+
+          <!-- Threshold Ruangan -->
+          <div class="card" style="padding: 20px; margin-bottom: 16px;">
+            <span class="label-strong">Threshold Ruangan</span>
+            <p class="text-muted" style="font-size: 12px; margin: 4px 0 14px;">Ubah rentang suhu/kelembaban aman per ruangan. Perubahan langsung berlaku untuk alarm & dashboard.</p>
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                  <tr style="background: var(--bg-2);">
+                    <th style="padding: 8px 10px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Ruangan</th>
+                    <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Suhu Min (°C)</th>
+                    <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Suhu Max (°C)</th>
+                    <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Hum Min (%)</th>
+                    <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Hum Max (%)</th>
+                    <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);" title="Koreksi kalibrasi sensor — ditambahkan ke pembacaan mentah">Kal. Suhu</th>
+                    <th style="padding: 8px 10px; text-align: center; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);" title="Koreksi kalibrasi sensor — ditambahkan ke pembacaan mentah">Kal. Hum</th>
+                    <th style="padding: 8px 10px; border-bottom: 1px solid var(--hair);"></th>
+                  </tr>
+                </thead>
+                <tbody id="admin-rooms-tbody">
+                  <tr><td colspan="8" style="padding: 24px; text-align: center; color: var(--muted-2);">Memuat…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Daftar Verifikator -->
+          <div class="card" style="padding: 20px; margin-bottom: 16px;">
+            <span class="label-strong">Daftar Verifikator</span>
+            <p class="text-muted" style="font-size: 12px; margin: 4px 0 14px;">Nama-nama yang muncul sebagai pilihan saat submit verifikasi shift (Kepatuhan). Tidak menghapus riwayat verifikasi yang sudah tercatat.</p>
+            <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+              <input type="text" id="admin-verifikator-name" class="input" placeholder="Nama lengkap verifikator" style="flex: 1; min-width: 200px; font-size: 13px; padding: 7px 10px; height: auto;" />
+              <button id="btn-admin-add-verifikator" class="btn-primary" style="font-size: 13px; padding: 7px 16px;">+ Tambah</button>
+            </div>
+            <div id="admin-verifikator-list" style="display: flex; flex-direction: column; gap: 6px;">
+              <p style="color: var(--muted-2); font-size: 12.5px;">Memuat…</p>
+            </div>
+          </div>
+
+          <!-- Audit Log -->
+          <div class="card" style="overflow: hidden;">
+            <div style="padding: 14px 18px; border-bottom: 1px solid var(--hair); display: flex; align-items: center; justify-content: space-between;">
+              <span class="label-strong">Riwayat Perubahan</span>
+              <span class="text-muted" style="font-size: 11.5px;">Siapa mengubah apa, kapan</span>
+            </div>
+            <div style="overflow-x: auto; max-height: 360px; overflow-y: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                <thead>
+                  <tr style="background: var(--bg-2);">
+                    <th style="padding: 8px 14px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; border-bottom: 1px solid var(--hair);">Waktu</th>
+                    <th style="padding: 8px 14px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Aksi</th>
+                    <th style="padding: 8px 14px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Detail</th>
+                    <th style="padding: 8px 14px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Oleh</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-audit-tbody">
+                  <tr><td colspan="4" style="padding: 24px; text-align: center; color: var(--muted-2);">Memuat…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <!-- /page-admin -->
+
+        <!-- ════════ PAGE: KEPATUHAN / REKAP BULANAN ════════ -->
+        <div id="page-kepatuhan" class="page">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+            <div>
+              <h1 style="font-size: 24px; font-weight: 600; letter-spacing: -0.022em; color: var(--ink); margin: 0;">Kepatuhan / Rekap Bulanan</h1>
+              <p class="text-muted" style="font-size: 13px; margin-top: 4px;">Digitalisasi formulir pencatatan suhu/kelembaban manual (Permenkes RI No. 72/2016) — verifikasi 3x/hari dengan tanda tangan digital.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <select id="kepatuhan-room" class="input" style="font-size: 13px; padding: 6px 10px; min-width: 200px; height: auto;">
+                <!-- Diisi app.js dari ROOM_CONFIG -->
+              </select>
+              <input type="month" id="kepatuhan-month" class="input" style="font-size: 13px; padding: 6px 10px; height: auto;" />
+              <button id="btn-kepatuhan-load" class="btn-primary" style="font-size: 13px; padding: 7px 14px;">Tampilkan</button>
+              <button id="btn-kepatuhan-pdf" class="btn-ghost no-print" style="font-size: 13px; padding: 7px 14px;">
+                <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Download PDF
+              </button>
+            </div>
+          </div>
+
+          <!-- Grafik ala formulir kertas — Suhu & Kelembaban terpisah, 3 titik/hari (Pagi/Siang/Malam) -->
+          <div class="card" style="padding: 20px; margin-bottom: 16px;">
+            <span class="label-strong">Grafik Suhu — <span id="kepatuhan-chart-title-temp">—</span></span>
+            <div class="chart-wrapper" style="height: 220px; margin-top: 10px;">
+              <canvas id="kepatuhan-chart-temp"></canvas>
+            </div>
+          </div>
+          <div class="card" style="padding: 20px; margin-bottom: 16px;">
+            <span class="label-strong">Grafik Kelembaban — <span id="kepatuhan-chart-title-hum">—</span></span>
+            <div class="chart-wrapper" style="height: 220px; margin-top: 10px;">
+              <canvas id="kepatuhan-chart-hum"></canvas>
+            </div>
+          </div>
+
+          <!-- Form submit verifikasi shift -->
+          <div class="card" style="padding: 20px; margin-bottom: 16px;">
+            <span class="label-strong">Verifikasi Shift Baru</span>
+            <p class="text-muted" style="font-size: 12px; margin: 4px 0 14px;">Isi sesuai jadwal cek: Pagi 07:00, Siang 14:00, Malam 22:00.</p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label class="label" style="display:block; margin-bottom:4px;">Shift</label>
+                <select id="kepatuhan-shift" class="input" style="width:100%; font-size:13px; padding:7px 10px; height:auto;">
+                  <option value="Pagi">Pagi (07:00)</option>
+                  <option value="Siang">Siang (14:00)</option>
+                  <option value="Malam">Malam (22:00)</option>
+                </select>
+              </div>
+              <div>
+                <label class="label" style="display:block; margin-bottom:4px;">Suhu (°C)</label>
+                <input type="number" step="0.1" id="kepatuhan-temp" class="input" style="width:100%; font-size:13px; padding:7px 10px; height:auto;" placeholder="mis. 22.5" />
+              </div>
+              <div>
+                <label class="label" style="display:block; margin-bottom:4px;">Kelembaban (%)</label>
+                <input type="number" step="0.1" id="kepatuhan-hum" class="input" style="width:100%; font-size:13px; padding:7px 10px; height:auto;" placeholder="mis. 50" />
+              </div>
+              <div>
+                <label class="label" style="display:block; margin-bottom:4px;">Verifikator</label>
+                <select id="kepatuhan-verifikator" class="input" style="width:100%; font-size:13px; padding:7px 10px; height:auto;">
+                  <option value="">— Pilih nama —</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <label class="label" style="display:block; margin-bottom:4px;">Catatan / Analisis</label>
+              <textarea id="kepatuhan-catatan" class="input" rows="2" style="width:100%; font-size:13px; padding:8px 10px; height:auto; resize:vertical;" placeholder="Opsional — kondisi ruangan, penyebab deviasi, dsb."></textarea>
+            </div>
+            <div style="margin-bottom: 14px;">
+              <label class="label" style="display:block; margin-bottom:4px;">Tindakan & Hasil</label>
+              <textarea id="kepatuhan-tindakan" class="input" rows="2" style="width:100%; font-size:13px; padding:8px 10px; height:auto; resize:vertical;" placeholder="Opsional — tindakan yang diambil jika ada deviasi"></textarea>
+            </div>
+
+            <div style="margin-bottom: 14px;">
+              <label class="label" style="display:block; margin-bottom:6px;">Tanda Tangan Digital</label>
+              <div style="border: 1px solid var(--hair); border-radius: 8px; background: #fff; touch-action: none; width: 100%; max-width: 420px;">
+                <canvas id="kepatuhan-signature-pad" width="420" height="150" style="width:100%; height:150px; display:block; cursor: crosshair;"></canvas>
+              </div>
+              <button id="btn-kepatuhan-sig-clear" class="btn-ghost" style="font-size: 12px; padding: 5px 12px; margin-top: 8px;" type="button">Hapus & Ulangi</button>
+            </div>
+
+            <button id="btn-kepatuhan-submit" class="btn-primary" style="padding: 10px 20px;">Simpan Verifikasi</button>
+            <span id="kepatuhan-submit-msg" style="margin-left: 10px; font-size: 12.5px;"></span>
+          </div>
+
+          <!-- Tabel entri verifikasi -->
+          <div class="card" style="overflow: hidden;">
+            <div style="padding: 14px 18px; border-bottom: 1px solid var(--hair);">
+              <span class="label-strong">Riwayat Verifikasi Bulan Ini</span>
+            </div>
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                <thead>
+                  <tr style="background: var(--bg-2);">
+                    <th style="padding: 8px 12px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); white-space:nowrap; border-bottom: 1px solid var(--hair);">Tanggal</th>
+                    <th style="padding: 8px 12px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Shift</th>
+                    <th style="padding: 8px 12px; text-align: right; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Suhu</th>
+                    <th style="padding: 8px 12px; text-align: right; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Hum</th>
+                    <th style="padding: 8px 12px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Verifikator</th>
+                    <th style="padding: 8px 12px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">TTD</th>
+                    <th style="padding: 8px 12px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--hair);">Catatan</th>
+                  </tr>
+                </thead>
+                <tbody id="kepatuhan-tbody">
+                  <tr><td colspan="7" style="padding:24px;text-align:center;color:var(--muted-2);">Pilih ruangan &amp; bulan, lalu klik Tampilkan.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <!-- /page-kepatuhan -->
 
       </main>
 

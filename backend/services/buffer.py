@@ -18,6 +18,25 @@ _telemetry_buffer: list = []        # List[dict], sorted by timestamp ASC
 MAX_BUFFER_SIZE   = 5760            # 24 jam @ 15 detik interval
 _buffer_bootstrapped = False
 
+# ── Decimasi write Firestore ─────────────────────────────────────
+# Buffer di memory tetap update INSTAN tiap POST masuk (dashboard & alert
+# tetap real-time), tapi penulisan PERMANEN ke Firestore di-throttle per
+# device supaya kuota write aman untuk 6 device sekaligus. Lihat dokumen
+# spesifikasi bagian 2.6.
+PERSIST_INTERVAL_SECONDS = 90
+_last_persisted_at: dict = {}
+
+
+def should_persist(device_id: str) -> bool:
+    """True kalau sudah waktunya tulis reading ini ke Firestore (throttled per device)."""
+    now = datetime.now(timezone.utc)
+    with _buffer_lock:
+        last = _last_persisted_at.get(device_id)
+        if last is None or (now - last).total_seconds() >= PERSIST_INTERVAL_SECONDS:
+            _last_persisted_at[device_id] = now
+            return True
+        return False
+
 
 # ── Bootstrap ─────────────────────────────────────────────────
 

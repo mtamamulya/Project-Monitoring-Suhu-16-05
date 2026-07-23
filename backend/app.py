@@ -24,10 +24,15 @@ from services.notifier import process_alert, check_offline_sensors, ROOM_CONFIG,
 from services.weather import get_outdoor_weather
 from services.buffer import (
     bootstrap_buffer, add_to_buffer, get_buffer_since,
-    get_latest, get_all_latest, get_buffer_size,
+    get_latest, get_all_latest, get_buffer_size, should_persist,
 )
+from services import config as config_service
+from services import alerts_log
+from services import retention
 from routes.ai import handle_chat
 from routes.analytics import run_analytics
+from routes import admin as admin_routes
+from routes import verification as verification_routes
 
 # ── Logging ───────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
@@ -203,26 +208,40 @@ def telemetry():
     device_id   = str(device_id)[:64]
     now         = datetime.now(timezone.utc)
 
-    # 1. Persist ke Firestore
-    try:
-        db.collection("telemetry").add({
-            "temperature": temperature,
-            "humidity":    humidity,
-            "device_id":   device_id,
-            "timestamp":   now,
-        })
-        logger.info("Telemetry saved: %s temp=%.2f hum=%.2f", device_id, temperature, humidity)
-    except Exception as exc:
-        logger.error("Firestore write failed: %s", exc)
-        return jsonify({"error": f"Firestore write failed: {exc}"}), 500
+    # 0. Terapkan koreksi kalibrasi per unit (kalau ada) — SEBELUM disimpan/dievaluasi,
+    #    supaya seluruh sistem (alert, buffer, compliance, analytics) selalu lihat nilai
+    #    yang sudah terkoreksi. Offset diatur lewat halaman Admin, bukan di firmware.
+    room_cfg = ROOM_CONFIG.get(device_id)
+    if room_cfg:
+        temperature = round(temperature + room_cfg.get("tempOffset", 0.0), 2)
+        humidity    = round(humidity    + room_cfg.get("humOffset", 0.0), 2)
+        humidity    = max(0.0, min(100.0, humidity))  # offset tidak boleh dorong keluar batas fisik 0-100%
 
-    # 2. Tambah ke in-memory buffer
+    # 1. Tambah ke in-memory buffer — SELALU, instan, tiap POST masuk.
+    #    Ini yang bikin dashboard & alert tetap terasa real-time terlepas dari
+    #    seberapa sering kita benar-benar menulis ke Firestore (lihat poin 2 di bawah).
     add_to_buffer({
         "temperature": temperature,
         "humidity":    humidity,
         "device_id":   device_id,
         "timestamp":   now,
     })
+
+    # 2. Persist ke Firestore — DI-THROTTLE per device (should_persist), bukan tiap POST.
+    #    Dengan 6 device, menulis tiap kiriman akan boros kuota write Firestore.
+    #    Reading yang di-skip di sini tetap "hidup" di buffer & tetap dievaluasi untuk alert.
+    if should_persist(device_id):
+        try:
+            db.collection("telemetry").add({
+                "temperature": temperature,
+                "humidity":    humidity,
+                "device_id":   device_id,
+                "timestamp":   now,
+            })
+            logger.info("Telemetry persisted: %s temp=%.2f hum=%.2f", device_id, temperature, humidity)
+        except Exception as exc:
+            logger.error("Firestore write failed: %s", exc)
+            # Non-fatal — data tetap ada di buffer, jangan gagalkan request ESP32 gara-gara ini.
 
     # 3. Update last-seen untuk deteksi offline
     try:
@@ -515,8 +534,181 @@ def analytics():
         return jsonify({"error": f"Analisis gagal: {exc}"}), 500
 
 
+# ── 11. History rentang tanggal bebas (akreditasi) ─────────────
+@app.route("/api/history-range", methods=["GET"])
+def history_range():
+    """
+    Ambil data historis untuk rentang tanggal bebas, langsung dari Firestore
+    (bukan buffer 24 jam) — dipakai halaman History untuk kebutuhan akreditasi
+    (mis. tarik data 1 bulan). Query params:
+      device_id : wajib
+      start     : YYYY-MM-DD (wajib)
+      end       : YYYY-MM-DD (wajib, eksklusif — data sampai sebelum tanggal ini)
+    """
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+
+    device_id = request.args.get("device_id")
+    start_str = request.args.get("start")
+    end_str   = request.args.get("end")
+
+    if not device_id or device_id not in ROOM_CONFIG:
+        return jsonify({"error": "device_id wajib diisi dan harus ruangan terdaftar"}), 400
+    if not start_str or not end_str:
+        return jsonify({"error": "Parameter start dan end (YYYY-MM-DD) wajib diisi"}), 400
+
+    try:
+        start_dt = datetime.strptime(start_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        end_dt   = datetime.strptime(end_str, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+    except ValueError:
+        return jsonify({"error": "Format tanggal harus YYYY-MM-DD"}), 400
+
+    if (end_dt - start_dt).days > 62:
+        return jsonify({"error": "Rentang maksimum 60 hari per permintaan"}), 400
+
+    try:
+        query = (
+            db.collection("telemetry")
+            .where("device_id", "==", device_id)
+            .where("timestamp", ">=", start_dt)
+            .where("timestamp", "<", end_dt)
+            .order_by("timestamp", direction=firestore.Query.ASCENDING)
+        )
+        docs = list(query.stream())
+        result = [{
+            "temperature": d.to_dict().get("temperature"),
+            "humidity":    d.to_dict().get("humidity"),
+            "device_id":   d.to_dict().get("device_id"),
+            "timestamp":   _serialize_ts(d.to_dict().get("timestamp")),
+        } for d in docs]
+        return jsonify({"data": result, "count": len(result)})
+    except Exception as exc:
+        logger.error("History-range query failed: %s", exc)
+        return jsonify({"error": f"Query gagal: {exc}"}), 500
+
+
+# ── 12. Admin — threshold ruangan ───────────────────────────────
+@app.route("/api/admin/rooms/<device_id>", methods=["PUT"])
+def admin_update_room(device_id):
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+    body = request.get_json(silent=True) or {}
+    updates = body.get("updates") or {k: v for k, v in body.items() if k != "changed_by"}
+    changed_by = body.get("changed_by", "unknown")
+    try:
+        updated = admin_routes.update_room(db, device_id, updates, changed_by)
+        return jsonify(updated)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("admin_update_room error: %s", exc)
+        return jsonify({"error": f"Gagal update: {exc}"}), 500
+
+
+# ── 13. Admin/Public — daftar verifikator ───────────────────────
+@app.route("/api/verifikators", methods=["GET"])
+def list_verifikators():
+    return jsonify(admin_routes.list_verifikators())
+
+
+@app.route("/api/admin/verifikators", methods=["POST"])
+def admin_add_verifikator():
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        entry = admin_routes.create_verifikator(db, body.get("name", ""), body.get("added_by", "unknown"))
+        return jsonify(entry), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("admin_add_verifikator error: %s", exc)
+        return jsonify({"error": f"Gagal tambah verifikator: {exc}"}), 500
+
+
+@app.route("/api/admin/verifikators/<verifikator_id>", methods=["DELETE"])
+def admin_delete_verifikator(verifikator_id):
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        admin_routes.delete_verifikator(db, verifikator_id, body.get("removed_by", "unknown"))
+        return jsonify({"status": "ok"})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except Exception as exc:
+        logger.error("admin_delete_verifikator error: %s", exc)
+        return jsonify({"error": f"Gagal hapus verifikator: {exc}"}), 500
+
+
+# ── 14. Admin — audit log ───────────────────────────────────────
+@app.route("/api/admin/audit-log", methods=["GET"])
+def admin_audit_log():
+    limit = request.args.get("limit", 50, type=int)
+    return jsonify(admin_routes.get_audit_log(db, limit))
+
+
+# ── 15. Verifikasi shift (tanda tangan digital) ─────────────────
+@app.route("/api/verifications", methods=["POST"])
+def submit_verification():
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        result = verification_routes.submit_verification(
+            db,
+            device_id=body.get("device_id"),
+            shift=body.get("shift"),
+            verifikator_id=body.get("verifikator_id"),
+            temperature=body.get("temperature"),
+            humidity=body.get("humidity"),
+            signature=body.get("signature"),
+            catatan=body.get("catatan", ""),
+            tindakan=body.get("tindakan", ""),
+        )
+        return jsonify(result), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("submit_verification error: %s", exc)
+        return jsonify({"error": f"Gagal simpan verifikasi: {exc}"}), 500
+
+
+@app.route("/api/verifications", methods=["GET"])
+def list_verifications():
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+    device_id = request.args.get("device_id")
+    try:
+        year  = request.args.get("year", type=int)
+        month = request.args.get("month", type=int)
+    except Exception:
+        year = month = None
+    if not device_id or not year or not month:
+        return jsonify({"error": "device_id, year, month wajib diisi"}), 400
+    try:
+        results = verification_routes.get_verifications(db, device_id, year, month)
+        return jsonify({"data": results, "count": len(results)})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("list_verifications error: %s", exc)
+        return jsonify({"error": f"Gagal ambil data: {exc}"}), 500
+
+
+# ── 16. Alerts — notification bell website ──────────────────────
+@app.route("/api/alerts", methods=["GET"])
+def recent_alerts():
+    """100% dari memory (alerts_log) — dipakai bell notifikasi di dashboard."""
+    limit = request.args.get("limit", 20, type=int)
+    return jsonify(alerts_log.get_recent_alerts(limit))
+
+
 # ── Bootstrap & Run ───────────────────────────────────────────
+config_service.load_config(db)
 bootstrap_buffer(db)
+alerts_log.bootstrap_alerts(db)
+retention.start_scheduler(db)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
