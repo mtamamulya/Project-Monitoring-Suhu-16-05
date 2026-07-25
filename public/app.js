@@ -63,6 +63,34 @@ const State = {
 const $  = (id)  => document.getElementById(id);
 const $$ = (sel) => document.querySelectorAll(sel);
 
+/**
+ * fetch() yang otomatis menyertakan Firebase ID token.
+ *
+ * Backend kini memverifikasi token ini untuk semua endpoint yang mengubah data
+ * (threshold, verifikator, entri verifikasi). Tanpa itu, siapa pun yang tahu URL
+ * Render bisa memalsukan catatan kepatuhan yang dipakai sebagai bukti akreditasi.
+ *
+ * Token Firebase berumur 1 jam; getIdToken() otomatis memperbarui kalau sudah
+ * mendekati kedaluwarsa, jadi aman dipanggil tiap request.
+ */
+async function authFetch(url, options = {}) {
+  const opts = { ...options, headers: { ...(options.headers || {}) } };
+  try {
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      const user = firebase.auth().currentUser;
+      if (user) {
+        const token = await user.getIdToken();
+        opts.headers['Authorization'] = 'Bearer ' + token;
+      }
+    }
+  } catch (e) {
+    // Gagal ambil token bukan alasan untuk membatalkan request — biarkan server
+    // yang memutuskan menolak, supaya pesan errornya jelas bagi pengguna.
+    console.warn('[Auth] Gagal ambil ID token:', e.message);
+  }
+  return fetch(url, opts);
+}
+
 function setText(id, val) {
   const el = $(id);
   if (el) el.textContent = val;
@@ -1343,6 +1371,13 @@ function attachListeners() {
       return;
     }
 
+    // 13b. Kepatuhan — ralat entri verifikasi yang salah input
+    const koreksiBtn = e.target.closest('.btn-koreksi-verifikasi');
+    if (koreksiBtn) {
+      koreksiVerifikasi(koreksiBtn.dataset.id);
+      return;
+    }
+
     // 14. Kepatuhan — tampilkan data ruangan+bulan terpilih
     const kepLoadBtn = e.target.closest('#btn-kepatuhan-load');
     if (kepLoadBtn) { fetchKepatuhanData(); return; }
@@ -1741,7 +1776,7 @@ async function saveRoomThreshold(row) {
   const slowTimer = setTimeout(() => setBtn('Membangunkan server…', true), 8000);
 
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/admin/rooms/' + encodeURIComponent(deviceId), {
+    const res = await authFetch(CONFIG.API_BASE_URL + '/api/admin/rooms/' + encodeURIComponent(deviceId), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates, changed_by: _currentUserEmail }),
@@ -1790,7 +1825,7 @@ async function addVerifikator() {
   const name = input?.value.trim();
   if (!name) { alert('Nama tidak boleh kosong.'); return; }
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/admin/verifikators', {
+    const res = await authFetch(CONFIG.API_BASE_URL + '/api/admin/verifikators', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, added_by: _currentUserEmail }),
@@ -1808,7 +1843,7 @@ async function addVerifikator() {
 async function deleteVerifikator(id, name) {
   if (!confirm(`Hapus verifikator "${name}"? Riwayat verifikasi yang sudah tercatat tidak akan ikut terhapus.`)) return;
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/admin/verifikators/' + encodeURIComponent(id), {
+    const res = await authFetch(CONFIG.API_BASE_URL + '/api/admin/verifikators/' + encodeURIComponent(id), {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ removed_by: _currentUserEmail }),
@@ -1826,7 +1861,7 @@ async function renderAdminAuditLog() {
   const tbody = $('admin-audit-tbody');
   if (!tbody) return;
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/admin/audit-log?limit=50');
+    const res = await authFetch(CONFIG.API_BASE_URL + '/api/admin/audit-log?limit=50');
     const logs = res.ok ? await res.json() : [];
     if (!logs.length) {
       tbody.innerHTML = '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--muted-2);">Belum ada perubahan tercatat.</td></tr>';
@@ -1902,11 +1937,11 @@ async function fetchKepatuhanData() {
   setText('kepatuhan-chart-title-hum',  room.name + ' — ' + monthVal);
 
   const tbody = $('kepatuhan-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--muted-2);">Memuat…</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--muted-2);">Memuat…</td></tr>';
 
   try {
     const url = CONFIG.API_BASE_URL + '/api/verifications?device_id=' + encodeURIComponent(deviceId) + '&year=' + year + '&month=' + month;
-    const res = await fetch(url);
+    const res = await authFetch(url);
 
     // JANGAN telan error jadi array kosong. Sebelumnya kegagalan server
     // (index Firestore belum dibuat, backend tidur, dsb) tampil persis sama
@@ -1972,7 +2007,7 @@ function _showKepatuhanError(rawMessage) {
   }
 
   tbody.innerHTML =
-    '<tr><td colspan="7" style="padding:20px 24px;text-align:left;line-height:1.65;">' +
+    '<tr><td colspan="8" style="padding:20px 24px;text-align:left;line-height:1.65;">' +
       '<strong style="color:' + tone + ';">' + title + '</strong>' +
       (hint ? '<br><span style="color:var(--muted);font-size:12.5px;">' + hint + '</span>' : '') +
       (consoleUrl
@@ -2058,7 +2093,7 @@ function renderKepatuhanTable(entries) {
     // di awal pemakaian: daftar verifikator masih kosong sehingga form tidak
     // bisa disubmit sama sekali.
     tbody.innerHTML =
-      '<tr><td colspan="7" style="padding:22px 24px;text-align:left;line-height:1.7;color:var(--muted);">' +
+      '<tr><td colspan="8" style="padding:22px 24px;text-align:left;line-height:1.7;color:var(--muted);">' +
         '<strong style="color:var(--ink);">Belum ada verifikasi untuk bulan ini.</strong><br>' +
         'Untuk mulai mengisi: pastikan sudah ada nama verifikator terdaftar di ' +
         '<strong>Admin → Setting</strong>, lalu isi form di bawah (shift, suhu, kelembaban, ' +
@@ -2067,6 +2102,9 @@ function renderKepatuhanTable(entries) {
       '</td></tr>';
     return;
   }
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
   tbody.innerHTML = entries.slice().reverse().map(e => {
     const d = new Date(e.submitted_at);
     const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -2075,18 +2113,81 @@ function renderKepatuhanTable(entries) {
     const sig = e.signature
       ? `<img src="${e.signature}" alt="ttd" style="height:26px;background:#fff;border-radius:3px;border:1px solid var(--hair);" />`
       : '—';
-    const catatan = (e.catatan || '—').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const catatan = esc(e.catatan || '—');
+
+    // Nilai yang sudah diralat ditampilkan seperti pada formulir kertas: angka
+    // lama dicoret, angka baru di sebelahnya. Auditor bisa melihat riwayatnya
+    // langsung tanpa harus membuka database.
+    const withOriginal = (nilai, asli, unit) => {
+      const baru = nilai != null ? nilai.toFixed(1) + unit : '—';
+      if (!e.corrected || asli == null || asli === nilai) return baru;
+      return `<span style="text-decoration:line-through;color:var(--muted-2);font-weight:400;">${asli.toFixed(1)}${unit}</span> ${baru}`;
+    };
+
+    const tandaKoreksi = e.corrected
+      ? `<span title="Dikoreksi ${esc(e.corrected_by || '')}: ${esc(e.correction_reason || '')}"
+              style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:5px;font-size:9.5px;font-weight:700;
+                     background:var(--amber-soft);color:var(--amber);vertical-align:middle;">RALAT</span>`
+      : '';
+
     return `<tr style="border-bottom:1px solid var(--hair);${rowBg}">
       <td style="padding:7px 12px;white-space:nowrap;">${dateStr}</td>
-      <td style="padding:7px 12px;">${e.shift}</td>
-      <td style="padding:7px 12px;text-align:right;font-weight:600;color:${valColor};">${e.temperature != null ? e.temperature.toFixed(1) : '—'}°C</td>
-      <td style="padding:7px 12px;text-align:right;font-weight:600;color:${valColor};">${e.humidity != null ? e.humidity.toFixed(1) : '—'}%</td>
-      <td style="padding:7px 12px;">${e.verifikator_name || '—'}</td>
+      <td style="padding:7px 12px;white-space:nowrap;">${esc(e.shift)}${tandaKoreksi}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:600;color:${valColor};white-space:nowrap;">${withOriginal(e.temperature, e.original_temperature, '°C')}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:600;color:${valColor};white-space:nowrap;">${withOriginal(e.humidity, e.original_humidity, '%')}</td>
+      <td style="padding:7px 12px;">${esc(e.verifikator_name || '—')}</td>
       <td style="padding:7px 12px;">${sig}</td>
-      <td style="padding:7px 12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${catatan}">${catatan}</td>
+      <td style="padding:7px 12px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${catatan}">${catatan}</td>
+      <td style="padding:7px 12px;text-align:right;white-space:nowrap;">
+        ${e.corrected
+          ? '<span style="font-size:11px;color:var(--muted-2);">sudah diralat</span>'
+          : `<button class="btn-ghost btn-koreksi-verifikasi" data-id="${esc(e.id)}"
+                     style="font-size:11.5px;padding:4px 10px;">Ralat</button>`}
+      </td>
     </tr>`;
   }).join('');
 }
+
+/**
+ * Ralat satu entri. Sengaja memakai prompt() berurutan, bukan modal khusus:
+ * ini tindakan jarang (hanya saat salah ketik), dan alur bertahap justru membuat
+ * petugas membaca nilai lama sebelum menggantinya.
+ */
+async function koreksiVerifikasi(id) {
+  const entry = _kepatuhanEntries.find(e => e.id === id);
+  if (!entry) { alert('Entri tidak ditemukan. Muat ulang halaman lalu coba lagi.'); return; }
+
+  const info = `Ralat entri ${entry.shift}, ${new Date(entry.submitted_at).toLocaleDateString('id-ID')}\n` +
+               `Nilai tercatat sekarang: ${entry.temperature}°C / ${entry.humidity}%\n\n` +
+               `Nilai lama TIDAK dihapus — tetap tersimpan dan tampil dicoret, ` +
+               `sesuai kaidah pencatatan dokumen akreditasi.`;
+
+  const suhuStr = prompt(info + '\n\nSuhu yang benar (°C):', String(entry.temperature));
+  if (suhuStr === null) return;
+  const humStr = prompt('Kelembaban yang benar (%):', String(entry.humidity));
+  if (humStr === null) return;
+
+  const suhu = parseFloat(suhuStr), hum = parseFloat(humStr);
+  if (Number.isNaN(suhu) || Number.isNaN(hum)) { alert('Suhu dan kelembaban harus angka.'); return; }
+
+  const alasan = prompt('Alasan koreksi (wajib, minimal 5 karakter).\nContoh: "Salah ketik saat input, angka tertukar."');
+  if (alasan === null) return;
+  if (alasan.trim().length < 5) { alert('Alasan koreksi terlalu pendek.'); return; }
+
+  try {
+    const res = await authFetch(CONFIG.API_BASE_URL + '/api/verifications/' + encodeURIComponent(id) + '/correct', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ temperature: suhu, humidity: hum, alasan: alasan.trim(), corrected_by: _currentUserEmail }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { alert('Gagal koreksi: ' + (data.error || 'unknown error')); return; }
+    fetchKepatuhanData();
+  } catch (e) {
+    alert('Gagal terhubung ke server.');
+  }
+}
+window.koreksiVerifikasi = koreksiVerifikasi;
 
 // ── Signature pad (canvas, mouse + touch) ──────────────────────────────────────
 function _initSignaturePad() {
@@ -2165,7 +2266,7 @@ async function submitKepatuhanVerification() {
   setMsg('Menyimpan…');
 
   try {
-    const res = await fetch(CONFIG.API_BASE_URL + '/api/verifications', {
+    const res = await authFetch(CONFIG.API_BASE_URL + '/api/verifications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_id: deviceId, shift, verifikator_id: verifikatorId, temperature: temp, humidity: hum, signature, catatan, tindakan }),
@@ -2207,21 +2308,43 @@ function exportKepatuhanPDF() {
   const w = window.open('', '_blank', 'width=900,height=700');
   if (!w) { alert('Pop-up diblokir browser. Izinkan pop-up lalu coba lagi.'); return; }
 
+  let adaRalat = false;
   const rows = _kepatuhanEntries.map((e, i) => {
     const d = new Date(e.submitted_at);
     const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
     const bg = i % 2 === 0 ? '#fff' : '#f9f9f7';
     const vColor = e.in_range ? '#059669' : '#DC2626';
     const sigImg = e.signature ? `<img src="${e.signature}" style="height:22px;">` : '—';
+
+    // Entri yang diralat dicetak dengan nilai lama dicoret, sama seperti koreksi
+    // pada formulir kertas — auditor harus bisa melihat jejaknya di dokumen cetak,
+    // bukan hanya di layar.
+    if (e.corrected) adaRalat = true;
+    const nilai = (baru, asli, unit) => {
+      const s = baru != null ? baru.toFixed(1) + unit : '—';
+      if (!e.corrected || asli == null || asli === baru) return s;
+      return `<s style="color:#999;font-weight:400;">${asli.toFixed(1)}${unit}</s> ${s}`;
+    };
+    const tandaRalat = e.corrected ? ' <sup style="color:#B45309;font-weight:700;">R</sup>' : '';
+    const catatanCetak = e.corrected
+      ? `${(e.catatan || '').slice(0, 40)} <em style="color:#B45309;">[Ralat: ${(e.correction_reason || '').slice(0, 40)}]</em>`
+      : (e.catatan || '').slice(0, 60);
+
     return `<tr style="background:${bg}">
-      <td style="padding:6px 10px;">${dateStr}</td><td style="padding:6px 10px;">${e.shift}</td>
-      <td style="padding:6px 10px;text-align:right;color:${vColor};font-weight:700;">${e.temperature != null ? e.temperature.toFixed(1) : '—'}°C</td>
-      <td style="padding:6px 10px;text-align:right;color:${vColor};font-weight:700;">${e.humidity != null ? e.humidity.toFixed(1) : '—'}%</td>
+      <td style="padding:6px 10px;">${dateStr}</td><td style="padding:6px 10px;">${e.shift}${tandaRalat}</td>
+      <td style="padding:6px 10px;text-align:right;color:${vColor};font-weight:700;">${nilai(e.temperature, e.original_temperature, '°C')}</td>
+      <td style="padding:6px 10px;text-align:right;color:${vColor};font-weight:700;">${nilai(e.humidity, e.original_humidity, '%')}</td>
       <td style="padding:6px 10px;">${e.verifikator_name || '—'}</td>
       <td style="padding:6px 10px;">${sigImg}</td>
-      <td style="padding:6px 10px;font-size:11px;">${(e.catatan || '').slice(0, 60)}</td>
+      <td style="padding:6px 10px;font-size:11px;">${catatanCetak}</td>
     </tr>`;
   }).join('');
+
+  const ketRalat = adaRalat
+    ? '<p style="margin-top:10px;font-size:10.5px;color:#666;"><sup style="color:#B45309;font-weight:700;">R</sup> ' +
+      'Entri diralat. Nilai yang dicoret adalah angka yang tercatat semula; nilai di sebelahnya adalah hasil koreksi. ' +
+      'Nilai asli sengaja tidak dihapus agar koreksi dapat ditelusuri.</p>'
+    : '';
 
   w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8">
 <title>Kepatuhan — ${roomName} — ${monthVal}</title>
@@ -2241,6 +2364,21 @@ ${tempImg ? `<div><strong style="font-size:13px;">Grafik Suhu</strong><br><img c
 ${humImg ? `<div><strong style="font-size:13px;">Grafik Kelembaban</strong><br><img class="chart" src="${humImg}"></div>` : ''}
 <table><thead><tr><th>Tanggal</th><th>Shift</th><th>Suhu</th><th>Hum</th><th>Verifikator</th><th>TTD</th><th>Catatan</th></tr></thead>
 <tbody>${rows}</tbody></table>
+${ketRalat}
+<div style="margin-top:42px;display:flex;justify-content:space-between;gap:40px;page-break-inside:avoid;">
+  <div style="flex:1;text-align:center;">
+    <div style="font-size:11.5px;color:#555;">Semarang, ${new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})}</div>
+    <div style="font-size:11.5px;color:#555;margin-top:2px;">Petugas Pencatat</div>
+    <div style="height:58px;"></div>
+    <div style="border-top:1px solid #111;padding-top:5px;font-size:11.5px;">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>
+  </div>
+  <div style="flex:1;text-align:center;">
+    <div style="font-size:11.5px;color:#555;">Mengetahui,</div>
+    <div style="font-size:11.5px;color:#555;margin-top:2px;">Kepala Ruangan</div>
+    <div style="height:58px;"></div>
+    <div style="border-top:1px solid #111;padding-top:5px;font-size:11.5px;">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>
+  </div>
+</div>
 </body></html>`);
   w.document.close();
 }

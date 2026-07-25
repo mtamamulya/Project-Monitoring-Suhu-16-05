@@ -139,6 +139,21 @@ WiFiMulti wifiMulti;
 // URL endpoint backend Render kamu
 #define API_ENDPOINT     "https://climateos-backend.onrender.com/api/telemetry"
 
+// ── KUNCI PERANGKAT ───────────────────────────────────────────────────────────
+// Backend memverifikasi header X-Device-Key sebelum menerima data. Tanpa ini,
+// siapa pun yang tahu URL backend bisa mengirim data suhu palsu — alarm bisa
+// dibungkam atau dipicu dari luar rumah sakit.
+//
+// Nilai di bawah HARUS SAMA PERSIS dengan variabel DEVICE_API_KEY di dashboard
+// Render (Environment > Add Environment Variable). Gunakan string acak panjang,
+// bukan kata yang mudah ditebak. Sama untuk semua 6 unit.
+//
+// Selama DEVICE_API_KEY di Render belum diisi (atau AUTH_ENFORCE belum true),
+// backend masih menerima kiriman tanpa kunci — supaya perangkat lama tidak
+// langsung mati sebelum sempat di-reflash. Setelah semua unit diperbarui,
+// aktifkan AUTH_ENFORCE=true di Render untuk mengunci sepenuhnya.
+#define DEVICE_API_KEY   "ganti-dengan-kunci-acak-panjang"
+
 // ID unik ruangan ini — WAJIB salah satu dari daftar di komentar atas file.
 #define DEVICE_ID        "PERINATOLOGI-01"
 
@@ -281,6 +296,7 @@ bool sendTelemetry(float temperature, float humidity) {
   HTTPClient http;
   http.begin(client, API_ENDPOINT);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Device-Key", DEVICE_API_KEY);  // wajib — lihat catatan di atas
   http.setTimeout(10000);  // 10 detik timeout
 
   int httpCode = http.POST(payload);
@@ -294,6 +310,17 @@ bool sendTelemetry(float temperature, float humidity) {
     return true;
   } else {
     Serial.println("[HTTP] ✗ Gagal! Code: " + String(httpCode) + " Response: " + response);
+
+    // 401 = kunci perangkat salah/tidak dikirim. Restart tidak akan menolong,
+    // justru menghabiskan baterai percuma. Beri tahu jelas dan tetap kirim
+    // berkala supaya begitu kunci di server dibetulkan, unit pulih sendiri.
+    if (httpCode == 401) {
+      Serial.println("[HTTP] !! DEVICE_API_KEY di firmware TIDAK COCOK dengan");
+      Serial.println("[HTTP]    DEVICE_API_KEY di Render. Perbaiki lalu flash ulang.");
+      failCount = 0;   // jangan hitung sebagai kegagalan jaringan
+      return false;
+    }
+
     failCount++;
     if (failCount >= 5) {
       Serial.println("[System] Terlalu banyak kegagalan berturut-turut. Restart...");

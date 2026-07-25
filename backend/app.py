@@ -29,6 +29,8 @@ from services.buffer import (
 from services import config as config_service
 from services import alerts_log
 from services import retention
+from services.timeutil import today_start_utc, parse_date_wib
+from services.auth import require_device_key, require_user, actor_email
 from routes.ai import handle_chat
 from routes.analytics import run_analytics
 from routes import admin as admin_routes
@@ -182,6 +184,7 @@ def ping():
 
 # ── 1. Telemetry Ingestion ────────────────────────────────────
 @app.route("/api/telemetry", methods=["POST"])
+@require_device_key
 def telemetry():
     if db is None:
         return jsonify({"error": "Database not connected."}), 503
@@ -248,6 +251,15 @@ def telemetry():
         update_last_seen(device_id)
     except Exception as exc:
         logger.warning("update_last_seen skipped: %s", exc)
+
+    # 3b. Pemicu retensi oportunistik. Endpoint ini yang paling sering dipanggil
+    #     (6 ESP32 x tiap menit), jadi paling andal untuk memastikan cleanup
+    #     benar-benar jalan meski container Render sering tidur. Sangat murah:
+    #     kalau belum waktunya, hanya satu perbandingan datetime.
+    try:
+        retention.maybe_run_cleanup(db)
+    except Exception as exc:
+        logger.warning("maybe_run_cleanup skipped: %s", exc)
 
     # 4. Medical Alert System (Level 1–3)
     try:
@@ -394,7 +406,10 @@ def stats():
       device_id : opsional — filter stats ke satu ruangan saja
     """
     device_id   = request.args.get("device_id") or None
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    # "Hari ini" menurut WIB, bukan UTC. Dengan UTC, statistik harian baru mulai
+    # dihitung pukul 07:00 pagi waktu setempat — perawat shift Pagi akan melihat
+    # "Terendah hari ini" kosong padahal sensor sudah berjalan semalaman.
+    today_start = today_start_utc()
     records     = get_buffer_since(today_start)
 
     if device_id:
@@ -474,17 +489,18 @@ def compliance():
     if not date_str:
         return jsonify({"error": "Missing date parameter"}), 400
 
+    # Tanggal ditafsirkan sebagai tanggal WIB. Kalau dibaca sebagai UTC, laporan
+    # "tanggal 5" sebenarnya berisi 5 Agt 07:00 s/d 6 Agt 07:00 waktu setempat —
+    # shift Malam tanggal 5 (22:00 WIB) bocor ke laporan tanggal 6.
     try:
-        dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        start_of_day, end_of_day = parse_date_wib(date_str)
     except ValueError:
         return jsonify({"error": "Invalid date format, gunakan YYYY-MM-DD"}), 400
 
-    start_of_day = dt
-    end_of_day   = dt + timedelta(days=1)
-    today_start  = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = today_start_utc()
 
     # Pakai buffer untuk data hari ini
-    if dt == today_start:
+    if start_of_day == today_start:
         raw_records = [
             r for r in get_buffer_since(start_of_day)
             if r.get("device_id") == device_id and r["timestamp"] < end_of_day
@@ -566,11 +582,15 @@ def history_range():
     if not start_str or not end_str:
         return jsonify({"error": "Parameter start dan end (YYYY-MM-DD) wajib diisi"}), 400
 
+    # Tanggal mulai & selesai ditafsirkan sebagai tanggal WIB (inklusif keduanya):
+    # start = 00:00 WIB tanggal mulai, end = 00:00 WIB sehari setelah tanggal selesai.
     try:
-        start_dt = datetime.strptime(start_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        end_dt   = datetime.strptime(end_str, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        start_dt, _ = parse_date_wib(start_str)
+        _, end_dt   = parse_date_wib(end_str)
     except ValueError:
         return jsonify({"error": "Format tanggal harus YYYY-MM-DD"}), 400
+    if end_dt <= start_dt:
+        return jsonify({"error": "Tanggal selesai harus sama atau setelah tanggal mulai"}), 400
 
     if (end_dt - start_dt).days > 62:
         return jsonify({"error": "Rentang maksimum 60 hari per permintaan"}), 400
@@ -598,12 +618,16 @@ def history_range():
 
 # ── 12. Admin — threshold ruangan ───────────────────────────────
 @app.route("/api/admin/rooms/<device_id>", methods=["PUT"])
+@require_user
 def admin_update_room(device_id):
     if db is None:
         return jsonify({"error": "Database not connected."}), 503
     body = request.get_json(silent=True) or {}
     updates = body.get("updates") or {k: v for k, v in body.items() if k != "changed_by"}
-    changed_by = body.get("changed_by", "unknown")
+    # Identitas diambil dari token yang sudah diverifikasi. Nilai 'changed_by'
+    # kiriman frontend hanya dipakai kalau autentikasi belum diberlakukan —
+    # kalau tidak, siapa pun bisa mengaku sebagai orang lain di audit log.
+    changed_by = actor_email(body.get("changed_by", "unknown"))
     try:
         updated = admin_routes.update_room(db, device_id, updates, changed_by)
         return jsonify(updated)
@@ -621,12 +645,13 @@ def list_verifikators():
 
 
 @app.route("/api/admin/verifikators", methods=["POST"])
+@require_user
 def admin_add_verifikator():
     if db is None:
         return jsonify({"error": "Database not connected."}), 503
     body = request.get_json(silent=True) or {}
     try:
-        entry = admin_routes.create_verifikator(db, body.get("name", ""), body.get("added_by", "unknown"))
+        entry = admin_routes.create_verifikator(db, body.get("name", ""), actor_email(body.get("added_by", "unknown")))
         return jsonify(entry), 201
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -636,12 +661,13 @@ def admin_add_verifikator():
 
 
 @app.route("/api/admin/verifikators/<verifikator_id>", methods=["DELETE"])
+@require_user
 def admin_delete_verifikator(verifikator_id):
     if db is None:
         return jsonify({"error": "Database not connected."}), 503
     body = request.get_json(silent=True) or {}
     try:
-        admin_routes.delete_verifikator(db, verifikator_id, body.get("removed_by", "unknown"))
+        admin_routes.delete_verifikator(db, verifikator_id, actor_email(body.get("removed_by", "unknown")))
         return jsonify({"status": "ok"})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 404
@@ -652,6 +678,7 @@ def admin_delete_verifikator(verifikator_id):
 
 # ── 14. Admin — audit log ───────────────────────────────────────
 @app.route("/api/admin/audit-log", methods=["GET"])
+@require_user
 def admin_audit_log():
     limit = request.args.get("limit", 50, type=int)
     return jsonify(admin_routes.get_audit_log(db, limit))
@@ -659,6 +686,7 @@ def admin_audit_log():
 
 # ── 15. Verifikasi shift (tanda tangan digital) ─────────────────
 @app.route("/api/verifications", methods=["POST"])
+@require_user
 def submit_verification():
     if db is None:
         return jsonify({"error": "Database not connected."}), 503
@@ -674,6 +702,7 @@ def submit_verification():
             signature=body.get("signature"),
             catatan=body.get("catatan", ""),
             tindakan=body.get("tindakan", ""),
+            submitted_by=actor_email(""),
         )
         return jsonify(result), 201
     except ValueError as exc:
@@ -683,7 +712,38 @@ def submit_verification():
         return jsonify({"error": f"Gagal simpan verifikasi: {exc}"}), 500
 
 
+@app.route("/api/verifications/<verification_id>/correct", methods=["PATCH"])
+@require_user
+def correct_verification(verification_id):
+    """
+    Ralat entri verifikasi yang salah input. Nilai lama TIDAK dihapus — disimpan
+    di field original_* dan entri ditandai corrected=True, meniru praktik coret-
+    dan-paraf pada formulir kertas supaya tetap sah sebagai bukti akreditasi.
+    """
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        result = verification_routes.correct_verification(
+            db,
+            verification_id=verification_id,
+            temperature=body.get("temperature"),
+            humidity=body.get("humidity"),
+            alasan=body.get("alasan", ""),
+            corrected_by=actor_email(body.get("corrected_by", "unknown")),
+            verifikator_id=body.get("verifikator_id", ""),
+            signature=body.get("signature", ""),
+        )
+        return jsonify(result)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.error("correct_verification error: %s", exc)
+        return jsonify({"error": f"Gagal koreksi: {exc}"}), 500
+
+
 @app.route("/api/verifications", methods=["GET"])
+@require_user
 def list_verifications():
     if db is None:
         return jsonify({"error": "Database not connected."}), 503
@@ -711,6 +771,36 @@ def recent_alerts():
     """100% dari memory (alerts_log) — dipakai bell notifikasi di dashboard."""
     limit = request.args.get("limit", 20, type=int)
     return jsonify(alerts_log.get_recent_alerts(limit))
+
+
+# ── 17. Retensi — status & pemicu manual/cron eksternal ─────────
+@app.route("/api/admin/retention", methods=["GET"])
+def retention_status():
+    """Kapan cleanup terakhir jalan — supaya tidak perlu menebak apakah retensi hidup."""
+    return jsonify(retention.get_status())
+
+
+@app.route("/api/admin/run-retention", methods=["POST"])
+def run_retention():
+    """
+    Pemicu cleanup dari luar. Dipakai kalau ingin waktu pembersihan yang pasti,
+    mis. cron-job.org memanggil endpoint ini sekali sehari. Dilindungi token
+    terpisah (CRON_SECRET) supaya tidak bisa dipanggil sembarang orang untuk
+    membebani Firestore.
+
+    Kirim header:  X-Cron-Secret: <nilai CRON_SECRET>
+    """
+    if db is None:
+        return jsonify({"error": "Database not connected."}), 503
+
+    expected = os.environ.get("CRON_SECRET", "").strip()
+    if not expected:
+        return jsonify({"error": "CRON_SECRET belum diset di server."}), 503
+    if request.headers.get("X-Cron-Secret", "") != expected:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    deleted = retention.cleanup_old_telemetry(db)
+    return jsonify({"status": "ok", "deleted": deleted, **retention.get_status()})
 
 
 # ── Bootstrap & Run ───────────────────────────────────────────
