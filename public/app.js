@@ -1920,6 +1920,7 @@ async function fetchKepatuhanData() {
     }
 
     const payload = await res.json();
+    _cancelKepatuhanRetry();   // berhasil — hentikan polling "menunggu index"
     _kepatuhanEntries = payload.data || [];
     renderKepatuhanCharts(_kepatuhanEntries, room);
     renderKepatuhanTable(_kepatuhanEntries);
@@ -1939,22 +1940,65 @@ function _showKepatuhanError(rawMessage) {
   const tbody = $('kepatuhan-tbody');
   if (!tbody) return;
   const msg = String(rawMessage || 'Kesalahan tidak diketahui');
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+  // Firestore menyelipkan URL console di pesan errornya. Pisahkan dari teks agar
+  // bisa jadi tautan yang benar-benar bisa diklik, bukan URL panjang mentah yang
+  // merusak tata letak.
+  const urlMatch = msg.match(/https:\/\/console\.firebase\.google\.com\/\S+/);
+  const consoleUrl = urlMatch ? urlMatch[0] : null;
+  const msgClean = consoleUrl ? msg.replace(consoleUrl, '').trim() : msg;
+
+  let title = 'Gagal memuat data verifikasi.';
   let hint = '';
-  if (/index/i.test(msg)) {
-    hint = 'Penyebab: composite index Firestore untuk koleksi <code>verifications</code> belum dibuat. ' +
-           'Jalankan <code>firebase deploy --only firestore:indexes</code> lalu tunggu beberapa menit sampai status index jadi "Enabled".';
+  let tone = 'var(--crit)';
+
+  if (/currently building|is building/i.test(msg)) {
+    // Ini BUKAN kegagalan konfigurasi — index sudah didaftarkan dan sedang dibangun.
+    // Menyuruh deploy ulang di sini justru menyesatkan.
+    tone = 'var(--amber)';
+    title = 'Index Firestore sedang dibangun — tunggu sebentar.';
+    hint = 'Deploy index sudah berhasil. Firestore masih menyiapkannya (biasanya 2–10 menit ' +
+           'untuk koleksi kecil). Tidak ada yang perlu diperbaiki — cukup tunggu lalu klik ' +
+           '<strong>Tampilkan</strong> lagi. Halaman ini juga akan mencoba ulang otomatis tiap 30 detik.';
+    _scheduleKepatuhanRetry();
+  } else if (/requires an index|failed_precondition/i.test(msg)) {
+    hint = 'Composite index Firestore untuk koleksi <code>verifications</code> belum terdaftar. ' +
+           'Jalankan <code>firebase deploy --only firestore:indexes</code> dari folder proyek, ' +
+           'atau klik tautan di bawah untuk membuatnya langsung.';
   } else if (/not connected|503/i.test(msg)) {
-    hint = 'Penyebab: backend tidak terhubung ke Firestore. Cek variabel <code>FIREBASE_SERVICE_ACCOUNT_JSON</code> di dashboard Render.';
+    hint = 'Backend tidak terhubung ke Firestore. Cek variabel <code>FIREBASE_SERVICE_ACCOUNT_JSON</code> ' +
+           'di dashboard Render.';
   }
 
-  const safe = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   tbody.innerHTML =
-    '<tr><td colspan="7" style="padding:20px 24px;color:var(--crit);text-align:left;line-height:1.6;">' +
-      '<strong>Gagal memuat data verifikasi.</strong><br>' +
-      '<span style="font-family:\'JetBrains Mono\',monospace;font-size:11.5px;color:var(--muted);">' + safe + '</span>' +
-      (hint ? '<br><span style="color:var(--muted);font-size:12px;">' + hint + '</span>' : '') +
+    '<tr><td colspan="7" style="padding:20px 24px;text-align:left;line-height:1.65;">' +
+      '<strong style="color:' + tone + ';">' + title + '</strong>' +
+      (hint ? '<br><span style="color:var(--muted);font-size:12.5px;">' + hint + '</span>' : '') +
+      (consoleUrl
+        ? '<br><a href="' + esc(consoleUrl) + '" target="_blank" rel="noopener noreferrer" ' +
+          'style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--sky);text-decoration:underline;">' +
+          'Buka status index di Firebase Console →</a>'
+        : '') +
+      '<br><span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--muted-2);' +
+      'display:inline-block;margin-top:8px;word-break:break-word;">' + esc(msgClean) + '</span>' +
     '</td></tr>';
+}
+
+// Coba ulang otomatis selama index masih dibangun, supaya tidak perlu menunggu
+// sambil menebak-nebak kapan siap. Berhenti sendiri begitu berhasil.
+let _kepatuhanRetryTimer = null;
+function _scheduleKepatuhanRetry() {
+  if (_kepatuhanRetryTimer) return;
+  _kepatuhanRetryTimer = setInterval(() => {
+    if (State.currentPage !== 'kepatuhan') return;   // jangan poll kalau user pindah halaman
+    fetchKepatuhanData();
+  }, 30000);
+}
+function _cancelKepatuhanRetry() {
+  if (!_kepatuhanRetryTimer) return;
+  clearInterval(_kepatuhanRetryTimer);
+  _kepatuhanRetryTimer = null;
 }
 
 function _buildKepatuhanChart(canvasEl, labels, data, pointColors, minVal, maxVal, unit) {
