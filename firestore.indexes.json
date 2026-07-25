@@ -1,0 +1,32 @@
+{
+  "indexes": [
+    {
+      "_comment": "Dipakai GET /api/verifications — halaman Kepatuhan / rekap bulanan. Query: where device_id == X, where submitted_at >= awal bulan, where submitted_at < awal bulan berikutnya, order by submitted_at ASC. Tanpa index ini Firestore melempar FAILED_PRECONDITION dan laporan bulanan selalu kosong.",
+      "collectionGroup": "verifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "device_id", "order": "ASCENDING" },
+        { "fieldPath": "submitted_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "Dipakai GET /api/history-range (History 7/30 hari + rentang tanggal bebas untuk akreditasi) DAN GET /api/compliance untuk tanggal historis. Query: where device_id == X, where timestamp range, order by timestamp ASC.",
+      "collectionGroup": "telemetry",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "device_id", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "Dipakai services/retention.py — cleanup_old_telemetry() mencari dokumen telemetry lebih tua dari 60 hari, urut naik, per batch. Hanya butuh timestamp, tapi didaftarkan eksplisit agar konsisten.",
+      "collectionGroup": "telemetry",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

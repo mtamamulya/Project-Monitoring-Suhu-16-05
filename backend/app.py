@@ -263,7 +263,7 @@ def telemetry():
 def latest():
     """
     100% from memory — 0 Firestore reads.
-    Query param opsional: ?device_id=NICU-01
+    Query param opsional: ?device_id=BERSALIN-01
     Tanpa device_id → return record paling baru dari semua device.
     """
     device_id = request.args.get("device_id") or None
@@ -296,6 +296,12 @@ def rooms():
             "tempMax": cfg["tempMax"],
             "humMin":  cfg["humMin"],
             "humMax":  cfg["humMax"],
+            # Offset kalibrasi WAJIB ikut dikirim. Halaman Admin mengisi kolom
+            # "Kal. Suhu"/"Kal. Hum" dari response ini; kalau tidak dikirim, kolom
+            # tampil 0 dan begitu tombol Simpan diklik nilai kalibrasi asli
+            # tertimpa jadi 0 (data loss).
+            "tempOffset": cfg.get("tempOffset", 0.0),
+            "humOffset":  cfg.get("humOffset", 0.0),
         }
         for device_id, cfg in ROOM_CONFIG.items()
     ])
@@ -456,7 +462,10 @@ def compliance():
     - Hari ini → pakai in-memory buffer (0 Firestore reads)
     - Hari sebelumnya → query Firestore
     """
-    device_id = request.args.get("device_id", "NICU-01")
+    # Default ke ruangan pertama yang terdaftar, bukan ID lama "NICU-01" yang
+    # sudah tidak ada sejak migrasi ke 6 ruangan RSND.
+    _default_room = next(iter(ROOM_CONFIG), "")
+    device_id = request.args.get("device_id") or _default_room
     date_str  = request.args.get("date")
 
     room = ROOM_CONFIG.get(device_id)

@@ -108,6 +108,19 @@ def update_room_threshold(db, device_id: str, updates: dict, changed_by: str) ->
     if not clean_updates:
         raise ValueError("Tidak ada field valid untuk diupdate")
 
+    # Offset kalibrasi dibatasi ±10 — di luar itu hampir pasti salah ketik, dan
+    # offset ekstrem bisa menyembunyikan sensor rusak (pembacaan ngawur jadi
+    # "terlihat normal" setelah dikoreksi). Lebih baik ditolak.
+    for off_key in ("tempOffset", "humOffset"):
+        if off_key in clean_updates:
+            try:
+                val = float(clean_updates[off_key])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{off_key} harus angka") from exc
+            if not (-10.0 <= val <= 10.0):
+                raise ValueError(f"{off_key} harus antara -10 dan 10")
+            clean_updates[off_key] = val
+
     # Validasi numerik dasar supaya tidak kesimpan config rusak (mis. min > max)
     merged = {**ROOM_CONFIG[device_id], **clean_updates}
     for lo, hi in (("tempMin", "tempMax"), ("humMin", "humMax")):

@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  MediClimate RS — Aturan keamanan Firestore
+//
+//  PENTING: browser TIDAK PERNAH membaca/menulis Firestore secara langsung.
+//  Semua akses data lewat backend Flask (Render) yang memakai Firebase Admin SDK
+//  — dan Admin SDK MELEWATI aturan ini sepenuhnya. Jadi menutup semua akses klien
+//  di sini tidak mematikan fitur apa pun, tapi memastikan data pasien/ruangan
+//  tidak bisa dibaca siapa pun yang cuma tahu projectId (yang memang tertulis
+//  di public/app.js dan bisa dilihat semua orang).
+//
+//  Firebase Auth tetap dipakai untuk login dashboard — itu layanan terpisah,
+//  tidak terpengaruh aturan ini.
+// ══════════════════════════════════════════════════════════════════════════════
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

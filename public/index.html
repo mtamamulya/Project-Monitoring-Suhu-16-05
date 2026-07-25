@@ -270,8 +270,16 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
       gap: 3px;
-      padding: 6px 16px;
+      /* Padding horizontal kecil + flex:1 supaya 5 item muat rapi bahkan di
+         layar 320px, tanpa item terpotong di tepi. */
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 6px 4px;
+      /* Target sentuh minimal 44px sesuai pedoman aksesibilitas — penting karena
+         dipakai perawat sambil bekerja, sering dengan satu tangan. */
+      min-height: 48px;
       border-radius: 10px;
       cursor: pointer;
       transition: all 0.14s ease;
@@ -282,13 +290,18 @@
     }
 
     .bnav-item svg {
-      width: 22px; height: 22px;
+      width: 21px; height: 21px;
+      flex-shrink: 0;
     }
 
     .bnav-item span {
-      font-size: 10px;
+      font-size: 9.5px;
       font-weight: 500;
       letter-spacing: 0.01em;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .bnav-item:hover {
@@ -307,6 +320,86 @@
     .bnav-item.active svg {
       stroke-width: 2.5;
     }
+
+    /* ── Sheet "Lainnya" (mobile) ──
+       Sidebar disembunyikan di bawah 1024px, jadi menu ML Analytics, Setting,
+       tema, dan LOGOUT tidak punya jalan masuk sama sekali dari HP. Sheet ini
+       yang menampungnya. */
+    .more-sheet-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      z-index: 60;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    .more-sheet-backdrop.open { display: block; }
+
+    .more-sheet {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 61;
+      background: var(--card);
+      border-top: 1px solid var(--hair);
+      border-radius: 18px 18px 0 0;
+      box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.18);
+      padding: 10px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+      transform: translateY(100%);
+      transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .more-sheet.open { transform: translateY(0); }
+
+    .more-sheet-grip {
+      width: 38px; height: 4px; border-radius: 99px;
+      background: var(--hair); margin: 4px auto 14px;
+    }
+
+    .more-sheet-item {
+      display: flex; align-items: center; gap: 12px;
+      width: 100%;
+      min-height: 50px;
+      padding: 12px 14px;
+      border: none; background: none;
+      border-radius: 11px;
+      font-family: 'Geist', sans-serif;
+      font-size: 14.5px; font-weight: 500;
+      color: var(--ink-2);
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.12s ease;
+    }
+    .more-sheet-item svg { width: 19px; height: 19px; flex-shrink: 0; }
+    .more-sheet-item:hover, .more-sheet-item:active { background: var(--bg-2); }
+    .more-sheet-item.danger { color: var(--crit); }
+
+    .more-sheet-sep {
+      height: 1px; background: var(--hair);
+      margin: 8px 6px;
+    }
+
+    .more-sheet-label {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
+      text-transform: uppercase; color: var(--muted-2);
+      padding: 8px 14px 4px;
+    }
+
+    /* Sheet ini murni alat bantu mobile — di desktop sidebar sudah menyediakan
+       semuanya, jadi pastikan tidak pernah muncul walau state JS-nya tertinggal. */
+    @media (min-width: 1024px) {
+      .more-sheet, .more-sheet-backdrop { display: none !important; }
+    }
+
+    /* ── Pembungkus tabel agar bisa digeser horizontal di layar sempit ──
+       Tabel Admin (8 kolom) dan Kepatuhan (7 kolom) mustahil muat di HP;
+       tanpa ini layout jebol keluar viewport. */
+    .table-scroll {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .table-scroll > table { min-width: 640px; }
 
     /* ── Pages ── */
     .page { display: none; }
@@ -687,7 +780,7 @@
     @media (max-width: 1023px) {
       .sidebar { display: none; }
       .main-content { margin-left: 0; }
-      .bottom-nav { display: flex; flex-direction: column; }
+      .bottom-nav { display: block; }
       .page-content { padding: 16px 16px calc(80px + env(safe-area-inset-bottom, 0px)); }
       .top-header { padding: 10px 16px; }
       .chat-fab { bottom: calc(72px + env(safe-area-inset-bottom, 0px) + 12px); }
@@ -1738,7 +1831,7 @@
           <div class="card" style="padding: 20px; margin-bottom: 16px;">
             <span class="label-strong">Threshold Ruangan</span>
             <p class="text-muted" style="font-size: 12px; margin: 4px 0 14px;">Ubah rentang suhu/kelembaban aman per ruangan. Perubahan langsung berlaku untuk alarm & dashboard.</p>
-            <div style="overflow-x: auto;">
+            <div class="table-scroll">
               <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
                   <tr style="background: var(--bg-2);">
@@ -1778,7 +1871,7 @@
               <span class="label-strong">Riwayat Perubahan</span>
               <span class="text-muted" style="font-size: 11.5px;">Siapa mengubah apa, kapan</span>
             </div>
-            <div style="overflow-x: auto; max-height: 360px; overflow-y: auto;">
+            <div class="table-scroll" style="max-height: 360px; overflow-y: auto;">
               <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
                 <thead>
                   <tr style="background: var(--bg-2);">
@@ -1887,7 +1980,7 @@
             <div style="padding: 14px 18px; border-bottom: 1px solid var(--hair);">
               <span class="label-strong">Riwayat Verifikasi Bulan Ini</span>
             </div>
-            <div style="overflow-x: auto;">
+            <div class="table-scroll">
               <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
                 <thead>
                   <tr style="background: var(--bg-2);">
@@ -1941,20 +2034,67 @@
         </svg>
         <span>History</span>
       </button>
+      <button class="bnav-item" data-page="kepatuhan">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <span>Kepatuhan</span>
+      </button>
       <button class="bnav-item" data-page="analysis">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-1"/>
         </svg>
         <span>Analysis</span>
       </button>
-      <button class="bnav-item" data-page="ml-analytics">
+      <button class="bnav-item" id="bnav-more" type="button" aria-haspopup="true" aria-expanded="false">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
         </svg>
-        <span>ML</span>
+        <span>Lainnya</span>
       </button>
     </div>
   </nav>
+
+  <!-- ══ SHEET "LAINNYA" (Mobile) ══
+       Menampung menu yang tidak muat di bottom nav. Ini juga SATU-SATUNYA jalan
+       logout dari HP, karena sidebar (tempat tombol logout desktop) disembunyikan
+       di bawah 1024px. -->
+  <div class="more-sheet-backdrop" id="more-sheet-backdrop"></div>
+  <div class="more-sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label="Menu lainnya">
+    <div class="more-sheet-grip"></div>
+
+    <div class="more-sheet-label">Menu</div>
+    <button class="more-sheet-item" data-page="ml-analytics">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+      </svg>
+      <span>ML Analytics</span>
+    </button>
+    <button class="more-sheet-item" data-page="admin">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+      <span>Pengaturan</span>
+    </button>
+
+    <div class="more-sheet-sep"></div>
+
+    <div class="more-sheet-label">Sistem</div>
+    <button class="more-sheet-item" id="more-sheet-theme" type="button">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+      </svg>
+      <span>Ganti Tema Terang/Gelap</span>
+    </button>
+    <button class="more-sheet-item danger" id="more-sheet-logout" type="button">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+      </svg>
+      <span id="more-sheet-logout-label">Keluar</span>
+    </button>
+    <div style="padding: 6px 14px 2px; font-size: 11.5px; color: var(--muted-2);" id="more-sheet-user">—</div>
+  </div>
 
   <!-- ══ FLOATING AI CHAT ══ -->
   <button class="chat-fab" id="chat-fab-btn" title="Ask Climate Analyst" aria-label="Open AI chat">

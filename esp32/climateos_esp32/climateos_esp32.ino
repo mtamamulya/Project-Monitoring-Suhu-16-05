@@ -140,7 +140,7 @@ WiFiMulti wifiMulti;
 #define API_ENDPOINT     "https://climateos-backend.onrender.com/api/telemetry"
 
 // ID unik ruangan ini — WAJIB salah satu dari daftar di komentar atas file.
-#define DEVICE_ID        "BERSALIN-01"
+#define DEVICE_ID        "PERINATOLOGI-01"
 
 // Pin dan tipe sensor
 #define DHT_PIN          4

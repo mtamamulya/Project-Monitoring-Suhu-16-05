@@ -275,18 +275,55 @@ function updateGauge(arcId, valId, value, min, max) {
 }
 
 // ── BADGE ─────────────────────────────────────────────────────────────────────
+/**
+ * Ambil batas ruangan yang sedang ditampilkan. Badge HARUS mengikuti threshold
+ * ruangan (dapat diubah admin, default Permenkes RI No. 72/2016: 15-25°C,
+ * 45-55% RH) — bukan angka hardcoded. Sebelumnya badge memakai standar
+ * kenyamanan umum (Normal 20-26°C, Ideal 40-60%) sehingga 26°C dilabeli
+ * "Normal" padahal melanggar batas, dan grafik/alert bilang sebaliknya.
+ */
+function _activeRoomLimits() {
+  const room = ROOM_CONFIG.find(r => r.id === State.selectedRoom);
+  return {
+    tempMin: room ? room.tempMin : 15,
+    tempMax: room ? room.tempMax : 25,
+    humMin:  room ? room.humMin  : 45,
+    humMax:  room ? room.humMax  : 55,
+  };
+}
+
+// Selisih di luar batas yang masih dianggap "hampir" (kuning) sebelum jadi merah.
+const NEAR_LIMIT_TEMP_C = 2.0;
+const NEAR_LIMIT_HUM_PCT = 5.0;
+
 function tempBadge(t) {
-  if (t < 20)  return { label: 'Cold',   style: 'background:var(--sky-soft);color:var(--sky);border-color:var(--sky);' };
-  if (t <= 26) return { label: 'Normal', style: 'background:var(--emerald-soft);color:var(--emerald);border-color:var(--emerald);' };
-  if (t < 32)  return { label: 'Warm',   style: 'background:var(--amber-soft);color:var(--amber);border-color:var(--amber);' };
-  return { label: '⚠ Hot', style: 'background:var(--crit-soft);color:var(--crit);border-color:var(--crit);', critical: true };
+  const { tempMin, tempMax } = _activeRoomLimits();
+  if (t >= tempMin && t <= tempMax) {
+    return { label: 'Normal', style: 'background:var(--emerald-soft);color:var(--emerald);border-color:var(--emerald);' };
+  }
+  if (t < tempMin) {
+    return t >= tempMin - NEAR_LIMIT_TEMP_C
+      ? { label: 'Agak Dingin', style: 'background:var(--sky-soft);color:var(--sky);border-color:var(--sky);' }
+      : { label: '⚠ Terlalu Dingin', style: 'background:var(--crit-soft);color:var(--crit);border-color:var(--crit);', critical: true };
+  }
+  return t <= tempMax + NEAR_LIMIT_TEMP_C
+    ? { label: 'Agak Panas', style: 'background:var(--amber-soft);color:var(--amber);border-color:var(--amber);' }
+    : { label: '⚠ Terlalu Panas', style: 'background:var(--crit-soft);color:var(--crit);border-color:var(--crit);', critical: true };
 }
 
 function humBadge(h) {
-  if (h < 40)  return { label: 'Dry',   style: 'background:var(--amber-soft);color:var(--amber);border-color:var(--amber);' };
-  if (h <= 60) return { label: 'Ideal', style: 'background:var(--emerald-soft);color:var(--emerald);border-color:var(--emerald);' };
-  if (h <= 75) return { label: 'Humid', style: 'background:var(--sky-soft);color:var(--sky);border-color:var(--sky);' };
-  return { label: 'Muggy', style: 'background:var(--teal-soft);color:var(--teal);border-color:var(--teal);' };
+  const { humMin, humMax } = _activeRoomLimits();
+  if (h >= humMin && h <= humMax) {
+    return { label: 'Normal', style: 'background:var(--emerald-soft);color:var(--emerald);border-color:var(--emerald);' };
+  }
+  if (h < humMin) {
+    return h >= humMin - NEAR_LIMIT_HUM_PCT
+      ? { label: 'Agak Kering', style: 'background:var(--amber-soft);color:var(--amber);border-color:var(--amber);' }
+      : { label: '⚠ Terlalu Kering', style: 'background:var(--crit-soft);color:var(--crit);border-color:var(--crit);', critical: true };
+  }
+  return h <= humMax + NEAR_LIMIT_HUM_PCT
+    ? { label: 'Agak Lembap', style: 'background:var(--sky-soft);color:var(--sky);border-color:var(--sky);' }
+    : { label: '⚠ Terlalu Lembap', style: 'background:var(--crit-soft);color:var(--crit);border-color:var(--crit);', critical: true };
 }
 
 function setBadge(id, cfg) {
@@ -627,29 +664,55 @@ function updateComfort(temp, hum, outdoor) {
     if (card) card.style.borderLeftColor = color;
   }
 
-  // ── 1. Suhu Ruangan (Kemenkes RI: 22–26°C untuk bangsal anak) ──
+  // Batas diambil dari konfigurasi ruangan aktif (bisa diubah admin), bukan
+  // angka tetap. Default Permenkes RI No. 72 Tahun 2016: 15–25°C dan 45–55% RH,
+  // sama dengan yang dipakai formulir pencatatan manual RSND.
+  const { tempMin, tempMax, humMin, humMax } = _activeRoomLimits();
+  const rangeTemp = tempMin + '–' + tempMax + '°C';
+  const rangeHum  = humMin + '–' + humMax + '%';
+
+  // ── 1. Suhu Ruangan ──
   let tl = '—', tn = '—';
   let thermalColor = 'var(--muted)';
   if (temp != null) {
-    if      (temp < 20)  { tl = '❄ Hipotermia Risk';   tn = 'Suhu terlalu rendah — risiko hipotermia pada neonatus'; thermalColor = 'var(--sky)'; }
-    else if (temp < 22)  { tl = '⚠ Di Bawah Standar';  tn = 'Di bawah ambang Kemenkes (22°C), naikkan suhu ruangan'; thermalColor = 'var(--amber)'; }
-    else if (temp <= 26) { tl = '✓ Sesuai Standar';     tn = 'Dalam rentang 22–26°C — optimal untuk pasien anak'; thermalColor = 'var(--emerald)'; }
-    else if (temp <= 28) { tl = '⚠ Sedikit Tinggi';     tn = 'Di atas standar, risiko dehidrasi pada pasien anak'; thermalColor = 'var(--amber)'; }
-    else if (temp <= 32) { tl = '⚠ Panas';              tn = 'Suhu tinggi — bisa memperburuk demam, segera ventilasi'; thermalColor = 'var(--coral)'; }
-    else                 { tl = '🔴 Kritis';            tn = 'Bahaya heat stress — tindakan pendinginan segera'; thermalColor = 'var(--crit)'; }
+    if (temp >= tempMin && temp <= tempMax) {
+      tl = '✓ Sesuai Standar'; tn = 'Dalam rentang ' + rangeTemp + ' sesuai Permenkes 72/2016'; thermalColor = 'var(--emerald)';
+    } else if (temp < tempMin) {
+      if (temp >= tempMin - NEAR_LIMIT_TEMP_C) {
+        tl = '⚠ Di Bawah Standar'; tn = 'Di bawah batas ' + tempMin + '°C — naikkan suhu ruangan'; thermalColor = 'var(--amber)';
+      } else {
+        tl = '🔴 Terlalu Dingin'; tn = 'Jauh di bawah ' + tempMin + '°C — risiko hipotermia, tindakan segera'; thermalColor = 'var(--crit)';
+      }
+    } else {
+      if (temp <= tempMax + NEAR_LIMIT_TEMP_C) {
+        tl = '⚠ Di Atas Standar'; tn = 'Melebihi batas ' + tempMax + '°C — periksa pendingin ruangan'; thermalColor = 'var(--amber)';
+      } else {
+        tl = '🔴 Terlalu Panas'; tn = 'Jauh di atas ' + tempMax + '°C — risiko heat stress, tindakan pendinginan segera'; thermalColor = 'var(--crit)';
+      }
+    }
   }
   setText('comfort-thermal', tl); setText('comfort-thermal-note', tn);
   setCardBorder('comfort-thermal-card', thermalColor);
 
-  // ── 2. Kelembaban (WHO: 40–60% RH untuk fasilitas kesehatan) ──
+  // ── 2. Kelembaban ──
   let hl = '—', hn = '—';
   let humColor = 'var(--muted)';
   if (hum != null) {
-    if      (hum < 30)  { hl = '⚠ Sangat Kering'; hn = 'Iritasi mukosa, dehidrasi kulit, risiko infeksi saluran napas'; humColor = 'var(--amber)'; }
-    else if (hum < 40)  { hl = '○ Agak Kering';   hn = 'Sedikit di bawah standar WHO, pantau kondisi pasien'; humColor = 'var(--amber)'; }
-    else if (hum <= 60) { hl = '✓ Sesuai Standar'; hn = 'Dalam rentang 40–60% — optimal untuk pemulihan pasien'; humColor = 'var(--emerald)'; }
-    else if (hum <= 70) { hl = '⚠ Agak Lembab';   hn = 'Mulai melebihi standar, risiko kontaminasi mikrobial'; humColor = 'var(--amber)'; }
-    else                { hl = '🔴 Terlalu Lembab'; hn = 'Pertumbuhan jamur & bakteri aktif — berbahaya untuk imunokompromais'; humColor = 'var(--crit)'; }
+    if (hum >= humMin && hum <= humMax) {
+      hl = '✓ Sesuai Standar'; hn = 'Dalam rentang ' + rangeHum + ' sesuai Permenkes 72/2016'; humColor = 'var(--emerald)';
+    } else if (hum < humMin) {
+      if (hum >= humMin - NEAR_LIMIT_HUM_PCT) {
+        hl = '⚠ Agak Kering'; hn = 'Di bawah batas ' + humMin + '% — pantau kondisi pasien'; humColor = 'var(--amber)';
+      } else {
+        hl = '🔴 Terlalu Kering'; hn = 'Jauh di bawah ' + humMin + '% — iritasi mukosa & risiko infeksi saluran napas'; humColor = 'var(--crit)';
+      }
+    } else {
+      if (hum <= humMax + NEAR_LIMIT_HUM_PCT) {
+        hl = '⚠ Agak Lembap'; hn = 'Melebihi batas ' + humMax + '% — risiko kontaminasi mikrobial'; humColor = 'var(--amber)';
+      } else {
+        hl = '🔴 Terlalu Lembap'; hn = 'Jauh di atas ' + humMax + '% — pertumbuhan jamur & bakteri aktif'; humColor = 'var(--crit)';
+      }
+    }
   }
   setText('comfort-hum', hl); setText('comfort-hum-note', hn);
   setCardBorder('comfort-hum-card', humColor);
@@ -658,13 +721,14 @@ function updateComfort(temp, hum, outdoor) {
   let il = '—', iNote = '—';
   let infColor = 'var(--muted)';
   if (temp != null && hum != null) {
-    const humHigh = hum > 60;
-    const tempWarm = temp > 26;
+    // Ikut batas ruangan juga, bukan angka 60/26/30 yang lama.
+    const humHigh  = hum > humMax;
+    const tempWarm = temp > tempMax;
     if (humHigh && tempWarm) {
       il = '🔴 Tinggi'; iNote = 'Suhu hangat + kelembaban tinggi = kondisi ideal pertumbuhan patogen'; infColor = 'var(--crit)';
     } else if (humHigh) {
       il = '⚠ Sedang'; iNote = 'Kelembaban tinggi meningkatkan risiko jamur Aspergillus & Candida'; infColor = 'var(--amber)';
-    } else if (hum < 30) {
+    } else if (hum < humMin - NEAR_LIMIT_HUM_PCT) {
       il = '⚠ Sedang'; iNote = 'Udara kering mengurangi pertahanan mukosa pasien terhadap infeksi'; infColor = 'var(--amber)';
     } else {
       il = '✓ Rendah'; iNote = 'Suhu & kelembaban dalam zona aman — risiko kontaminasi minimal'; infColor = 'var(--emerald)';
@@ -873,7 +937,12 @@ async function fetchAndRenderHistoryRange(startStr, endStr, rangeLabel) {
     const res = await fetch(url);
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))).error || ('HTTP ' + res.status);
-      alert('Gagal ambil data: ' + err);
+      // Kegagalan paling sering di sini adalah composite index telemetry belum
+      // dibuat — sebutkan langkah perbaikannya, jangan cuma lempar pesan mentah.
+      const hint = /index/i.test(err)
+        ? '\n\nComposite index Firestore untuk koleksi "telemetry" belum aktif.\nJalankan: firebase deploy --only firestore:indexes'
+        : '';
+      alert('Gagal ambil data: ' + err + hint);
       return;
     }
     const data = (await res.json()).data || [];
@@ -883,6 +952,7 @@ async function fetchAndRenderHistoryRange(startStr, endStr, rangeLabel) {
     renderSummary(data, State.histRange);
   } catch (e) {
     console.warn('[HistoryRange]', e.message);
+    alert('Tidak bisa terhubung ke server. Backend Render mungkin sedang bangun dari mode tidur — tunggu ~40 detik lalu coba lagi.');
   }
 }
 
@@ -1088,15 +1158,51 @@ th:nth-child(2),th:nth-child(3){text-align:right}td{padding:7px 14px;border-bott
   w.document.close();
 }
 
+// ── SHEET "LAINNYA" (mobile) ──────────────────────────────────────────────────
+// Sidebar disembunyikan di bawah 1024px, sehingga ML Analytics, Pengaturan,
+// ganti tema, dan LOGOUT tidak punya jalan masuk dari HP. Sheet ini menampungnya.
+function openMoreSheet() {
+  const sheet = $('more-sheet'), backdrop = $('more-sheet-backdrop');
+  if (!sheet || !backdrop) return;
+  // Tampilkan identitas sesi yang sedang aktif — di HP tidak ada sidebar-user.
+  setText('more-sheet-user', 'Masuk sebagai: ' + _currentUserEmail);
+  backdrop.classList.add('open');
+  requestAnimationFrame(() => sheet.classList.add('open'));
+  const btn = $('bnav-more');
+  if (btn) btn.setAttribute('aria-expanded', 'true');
+  document.body.style.overflow = 'hidden';   // cegah halaman ikut scroll di belakang sheet
+}
+
+function closeMoreSheet() {
+  const sheet = $('more-sheet'), backdrop = $('more-sheet-backdrop');
+  if (!sheet || !backdrop) return;
+  sheet.classList.remove('open');
+  backdrop.classList.remove('open');
+  const btn = $('bnav-more');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+  document.body.style.overflow = '';
+}
+
+function toggleMoreSheet() {
+  const sheet = $('more-sheet');
+  if (!sheet) return;
+  sheet.classList.contains('open') ? closeMoreSheet() : openMoreSheet();
+}
+
 // ── EVENT LISTENERS ───────────────────────────────────────────────────────────
 function attachListeners() {
   document.body.addEventListener('click', e => {
-    // 1. Navigation
-    const navBtn = e.target.closest('.nav-item[data-page], .bnav-item[data-page]');
+    // 1. Navigation — termasuk item di dalam sheet "Lainnya" (mobile)
+    const navBtn = e.target.closest('.nav-item[data-page], .bnav-item[data-page], .more-sheet-item[data-page]');
     if (navBtn) {
       navigateTo(navBtn.dataset.page);
+      closeMoreSheet();   // sheet selalu tertutup setelah memilih halaman
       return;
     }
+
+    // 1b. Tombol "Lainnya" di bottom nav (mobile) + backdrop untuk menutup
+    if (e.target.closest('#bnav-more')) { toggleMoreSheet(); return; }
+    if (e.target.closest('#more-sheet-backdrop')) { closeMoreSheet(); return; }
 
     // 2. Chat Fab
     const fabBtn = e.target.closest('#chat-fab-btn');
@@ -1617,18 +1723,45 @@ async function saveRoomThreshold(row) {
   const updates = {};
   row.querySelectorAll('.admin-th-input').forEach(inp => { updates[inp.dataset.field] = parseFloat(inp.value); });
   if (Object.values(updates).some(v => Number.isNaN(v))) { alert('Semua nilai threshold harus angka.'); return; }
+
+  // Feedback langsung di tombol. Tanpa ini, request yang memakan 30-60 detik
+  // (cold start Render free tier) terasa seperti aplikasi hang, dan user
+  // cenderung mengklik berulang kali sehingga menumpuk request.
+  const btn = row.querySelector('.btn-admin-save-room');
+  const originalLabel = btn ? btn.textContent : '';
+  const setBtn = (text, disabled, color) => {
+    if (!btn) return;
+    btn.textContent = text;
+    btn.disabled = !!disabled;
+    btn.style.color = color || '';
+  };
+  setBtn('Menyimpan…', true);
+
+  // Kalau lebih dari 8 detik, hampir pasti backend sedang bangun dari tidur.
+  const slowTimer = setTimeout(() => setBtn('Membangunkan server…', true), 8000);
+
   try {
     const res = await fetch(CONFIG.API_BASE_URL + '/api/admin/rooms/' + encodeURIComponent(deviceId), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates, changed_by: _currentUserEmail }),
     });
+    clearTimeout(slowTimer);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { alert('Gagal simpan: ' + (data.error || 'unknown error')); return; }
+    if (!res.ok) {
+      setBtn(originalLabel || 'Simpan', false);
+      alert('Gagal simpan: ' + (data.error || 'unknown error'));
+      return;
+    }
+    setBtn('✓ Tersimpan', true, 'var(--emerald)');
     await fetchRooms();      // refresh ROOM_CONFIG global (dipakai dashboard, history, dll)
     renderAdminAuditLog();
+    setTimeout(() => setBtn(originalLabel || 'Simpan', false), 2000);
   } catch (e) {
-    alert('Gagal terhubung ke server.');
+    clearTimeout(slowTimer);
+    setBtn(originalLabel || 'Simpan', false);
+    alert('Gagal terhubung ke server.\n\nBackend Render free tier tidur setelah ~15 menit tanpa aktivitas; ' +
+          'request pertama butuh 30-60 detik untuk membangunkannya. Tunggu sebentar lalu coba lagi.');
   }
 }
 
@@ -1774,14 +1907,54 @@ async function fetchKepatuhanData() {
   try {
     const url = CONFIG.API_BASE_URL + '/api/verifications?device_id=' + encodeURIComponent(deviceId) + '&year=' + year + '&month=' + month;
     const res = await fetch(url);
-    const payload = res.ok ? await res.json() : { data: [] };
+
+    // JANGAN telan error jadi array kosong. Sebelumnya kegagalan server
+    // (index Firestore belum dibuat, backend tidur, dsb) tampil persis sama
+    // dengan "belum ada data" — mustahil didiagnosa. Sekarang dibedakan tegas.
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      _kepatuhanEntries = [];
+      renderKepatuhanCharts([], room);
+      _showKepatuhanError(payload.error || ('Server membalas HTTP ' + res.status));
+      return;
+    }
+
+    const payload = await res.json();
     _kepatuhanEntries = payload.data || [];
     renderKepatuhanCharts(_kepatuhanEntries, room);
     renderKepatuhanTable(_kepatuhanEntries);
   } catch (e) {
     console.warn('[Kepatuhan]', e.message);
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--crit);">Gagal memuat data.</td></tr>';
+    _kepatuhanEntries = [];
+    renderKepatuhanCharts([], room);
+    _showKepatuhanError('Tidak bisa terhubung ke server. Backend Render mungkin sedang bangun dari mode tidur — tunggu ~40 detik lalu klik Tampilkan lagi.');
   }
+}
+
+/**
+ * Tampilkan kegagalan apa adanya, lengkap dengan tebakan penyebab yang paling
+ * sering terjadi, supaya bisa langsung ditindak tanpa buka console browser.
+ */
+function _showKepatuhanError(rawMessage) {
+  const tbody = $('kepatuhan-tbody');
+  if (!tbody) return;
+  const msg = String(rawMessage || 'Kesalahan tidak diketahui');
+
+  let hint = '';
+  if (/index/i.test(msg)) {
+    hint = 'Penyebab: composite index Firestore untuk koleksi <code>verifications</code> belum dibuat. ' +
+           'Jalankan <code>firebase deploy --only firestore:indexes</code> lalu tunggu beberapa menit sampai status index jadi "Enabled".';
+  } else if (/not connected|503/i.test(msg)) {
+    hint = 'Penyebab: backend tidak terhubung ke Firestore. Cek variabel <code>FIREBASE_SERVICE_ACCOUNT_JSON</code> di dashboard Render.';
+  }
+
+  const safe = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  tbody.innerHTML =
+    '<tr><td colspan="7" style="padding:20px 24px;color:var(--crit);text-align:left;line-height:1.6;">' +
+      '<strong>Gagal memuat data verifikasi.</strong><br>' +
+      '<span style="font-family:\'JetBrains Mono\',monospace;font-size:11.5px;color:var(--muted);">' + safe + '</span>' +
+      (hint ? '<br><span style="color:var(--muted);font-size:12px;">' + hint + '</span>' : '') +
+    '</td></tr>';
 }
 
 function _buildKepatuhanChart(canvasEl, labels, data, pointColors, minVal, maxVal, unit) {
@@ -1837,7 +2010,17 @@ function renderKepatuhanTable(entries) {
   const tbody = $('kepatuhan-tbody');
   if (!tbody) return;
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--muted-2);">Belum ada verifikasi untuk bulan ini.</td></tr>';
+    // Empty state yang mengajari, bukan cuma memberi tahu. Penyebab paling sering
+    // di awal pemakaian: daftar verifikator masih kosong sehingga form tidak
+    // bisa disubmit sama sekali.
+    tbody.innerHTML =
+      '<tr><td colspan="7" style="padding:22px 24px;text-align:left;line-height:1.7;color:var(--muted);">' +
+        '<strong style="color:var(--ink);">Belum ada verifikasi untuk bulan ini.</strong><br>' +
+        'Untuk mulai mengisi: pastikan sudah ada nama verifikator terdaftar di ' +
+        '<strong>Admin → Setting</strong>, lalu isi form di bawah (shift, suhu, kelembaban, ' +
+        'nama verifikator, tanda tangan) dan klik Simpan Verifikasi. ' +
+        'Sesuai Permenkes 72/2016 diisi 3× sehari: Pagi 07.00, Siang 14.00, Malam 22.00.' +
+      '</td></tr>';
     return;
   }
   tbody.innerHTML = entries.slice().reverse().map(e => {
@@ -1961,7 +2144,16 @@ async function submitKepatuhanVerification() {
 }
 
 function exportKepatuhanPDF() {
-  if (!_kepatuhanEntries.length) { alert('Tidak ada data verifikasi untuk diekspor.'); return; }
+  if (!_kepatuhanEntries.length) {
+    alert('Tidak ada data verifikasi untuk diekspor.\n\n' +
+          'Laporan PDF dibuat dari entri verifikasi shift, bukan dari data sensor otomatis.\n' +
+          'Langkah agar terisi:\n' +
+          '1. Admin → Setting → tambahkan minimal 1 nama verifikator\n' +
+          '2. Kembali ke halaman ini, isi form verifikasi (shift, suhu, kelembaban, nama, tanda tangan)\n' +
+          '3. Klik Simpan Verifikasi — ulangi tiap shift (Pagi/Siang/Malam)\n\n' +
+          'Kalau tabel di bawah menampilkan pesan merah, itu kegagalan server, bukan data kosong — baca pesannya.');
+    return;
+  }
   const room     = ROOM_CONFIG.find(r => r.id === $('kepatuhan-room')?.value);
   const roomName = room ? room.name : ($('kepatuhan-room')?.value || '—');
   const monthVal = $('kepatuhan-month')?.value || '';
@@ -2138,36 +2330,60 @@ function initAuth() {
 }
 
 function showLogin() {
+  closeMoreSheet();                       // jangan tinggalkan sheet mobile terbuka di atas layar login
+  document.body.style.overflow = '';      // pulihkan scroll kalau sheet sempat mengunci
   $('login-screen').style.display = 'flex';
   document.querySelector('.app-shell').style.display = 'none';
   if ($('sidebar-user')) $('sidebar-user').style.display = 'none';
+  const bnav = document.querySelector('.bottom-nav');
+  if (bnav) bnav.style.display = 'none';  // bottom nav tidak boleh mengambang di layar login
+
+  // Kosongkan field sandi supaya tidak tertinggal di perangkat bersama.
+  if ($('login-pass')) $('login-pass').value = '';
+  if ($('login-error')) $('login-error').style.display = 'none';
 }
 
 function showApp(mode, user=null) {
   currentMode = mode;
   $('login-screen').style.display = 'none';
   document.querySelector('.app-shell').style.display = 'flex';
-  
+
+  // Bottom nav dikembalikan ke kendali CSS (hanya tampil di bawah 1024px).
+  // showLogin() menyembunyikannya lewat inline style, jadi harus dibersihkan.
+  const bnav = document.querySelector('.bottom-nav');
+  if (bnav) bnav.style.display = '';
+
   if (mode === 'publik') {
     if ($('public-banner')) $('public-banner').style.display = 'block';
-    
+
     // Hide extra navs
     $$('.sidebar-nav .nav-item').forEach(btn => {
       if (btn.dataset.page && btn.dataset.page !== 'dashboard') {
         btn.style.display = 'none';
       }
     });
+    // Mode publik: hanya Dashboard. Sembunyikan juga entri mobile-nya, kalau
+    // tidak, halaman internal tetap bisa dibuka dari HP lewat bottom nav/sheet.
+    $$('.bnav-item[data-page]').forEach(btn => {
+      btn.style.display = btn.dataset.page === 'dashboard' ? 'flex' : 'none';
+    });
+    if ($('bnav-more')) $('bnav-more').style.display = 'none';
+
     // Hide export/chat
     if ($('btn-export-csv')) $('btn-export-csv').style.display = 'none';
-    if ($('chat-fab')) $('chat-fab').style.display = 'none';
+    // id tombolnya 'chat-fab-btn' (class-nya yang 'chat-fab') — sebelumnya
+    // salah sasaran sehingga FAB chat tetap muncul di mode publik.
+    if ($('chat-fab-btn')) $('chat-fab-btn').style.display = 'none';
     if ($('btn-notif-bell')) $('btn-notif-bell').parentElement.style.display = 'none';
 
     navigateTo('dashboard');
   } else {
     if ($('public-banner')) $('public-banner').style.display = 'none';
     $$('.sidebar-nav .nav-item').forEach(btn => btn.style.display = 'flex');
+    $$('.bnav-item[data-page]').forEach(btn => btn.style.display = 'flex');
+    if ($('bnav-more')) $('bnav-more').style.display = 'flex';
     if ($('btn-export-csv')) $('btn-export-csv').style.display = 'flex';
-    if ($('chat-fab')) $('chat-fab').style.display = 'flex';
+    if ($('chat-fab-btn')) $('chat-fab-btn').style.display = 'flex';
     if ($('btn-notif-bell')) $('btn-notif-bell').parentElement.style.display = 'block';
     _initBrowserNotif();  // prompt perawat untuk enable notifikasi browser
     _initAlarmSoundBtn(); // prompt perawat untuk enable suara alarm website
@@ -2185,33 +2401,95 @@ function showApp(mode, user=null) {
 
 window.showApp = showApp; // expose for public button
 
+/** Pesan error Firebase Auth diterjemahkan ke bahasa yang dimengerti perawat. */
+function _authErrorMessage(err) {
+  const code = (err && err.code) || '';
+  const map = {
+    'auth/invalid-email':        'Format email tidak valid.',
+    'auth/user-disabled':        'Akun ini dinonaktifkan. Hubungi administrator.',
+    'auth/user-not-found':       'Email atau kata sandi salah.',
+    'auth/wrong-password':       'Email atau kata sandi salah.',
+    'auth/invalid-credential':   'Email atau kata sandi salah.',
+    'auth/too-many-requests':    'Terlalu banyak percobaan gagal. Tunggu beberapa menit lalu coba lagi.',
+    'auth/network-request-failed': 'Tidak ada koneksi internet. Periksa jaringan lalu coba lagi.',
+  };
+  return map[code] || (err && err.message) || 'Login gagal. Coba lagi.';
+}
+
 if ($('login-form')) {
   $('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = $('login-email').value;
-    const pass = $('login-pass').value;
+    const email   = ($('login-email').value || '').trim();
+    const pass    = $('login-pass').value || '';
+    const errEl   = $('login-error');
+    const submit  = $('login-form').querySelector('button[type="submit"]');
+    const origLbl = submit ? submit.textContent : '';
+
+    const showErr = (msg) => {
+      if (!errEl) return;
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    };
+    if (errEl) errEl.style.display = 'none';
+
+    if (!email || !pass) { showErr('Email dan kata sandi wajib diisi.'); return; }
+
+    // KEAMANAN: versi lama punya jalur fallback yang langsung meloloskan user ke
+    // mode internal ketika Firebase SDK gagal dimuat — artinya siapa pun bisa
+    // masuk TANPA password hanya dengan memblokir skrip Firebase. Untuk sistem
+    // data rumah sakit itu tidak bisa diterima. Sekarang: kalau layanan auth
+    // tidak tersedia, login DITOLAK, tidak ada jalan pintas.
+    if (typeof firebase === 'undefined' || !firebase.auth) {
+      showErr('Layanan autentikasi tidak dapat dimuat. Periksa koneksi internet, ' +
+              'lalu muat ulang halaman. Login tidak dapat dilanjutkan tanpa verifikasi.');
+      return;
+    }
+
+    if (submit) { submit.disabled = true; submit.textContent = 'Memverifikasi…'; }
     try {
-      if (typeof firebase !== 'undefined' && firebase.auth) {
-        await firebase.auth().signInWithEmailAndPassword(email, pass);
-      } else {
-        // Dummy login if firebase sdk not loaded or config failed
-        showApp('internal', {email});
-      }
+      await firebase.auth().signInWithEmailAndPassword(email, pass);
+      // Sukses — onAuthStateChanged yang akan memanggil showApp().
     } catch (err) {
-      $('login-error').textContent = err.message || 'Login gagal';
-      $('login-error').style.display = 'block';
+      showErr(_authErrorMessage(err));
+    } finally {
+      if (submit) { submit.disabled = false; submit.textContent = origLbl || 'Masuk'; }
     }
   });
 }
 
-if ($('btn-logout')) {
-  $('btn-logout').addEventListener('click', (e) => {
-    e.preventDefault();
+/**
+ * Logout terpusat — dipakai tombol sidebar (desktop) DAN sheet "Lainnya" (mobile).
+ * Minta konfirmasi lebih dulu: dashboard ini sering dibiarkan terbuka di nurse
+ * station, jadi logout tak sengaja berarti monitoring berhenti tampil.
+ */
+async function performLogout() {
+  if (!confirm('Keluar dari akun?\n\nMonitoring akan berhenti ditampilkan sampai ada yang masuk kembali.')) return;
+  closeMoreSheet();
+  try {
     if (typeof firebase !== 'undefined' && firebase.auth) {
-      firebase.auth().signOut();
+      await firebase.auth().signOut();
     } else {
       showLogin();
     }
+  } catch (e) {
+    console.warn('[Auth] signOut gagal:', e.message);
+    showLogin();
+  }
+}
+window.performLogout = performLogout;
+
+if ($('btn-logout')) {
+  $('btn-logout').addEventListener('click', (e) => { e.preventDefault(); performLogout(); });
+}
+if ($('more-sheet-logout')) {
+  $('more-sheet-logout').addEventListener('click', (e) => { e.preventDefault(); performLogout(); });
+}
+if ($('more-sheet-theme')) {
+  $('more-sheet-theme').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('climateos-theme', next); } catch (e) {}
   });
 }
 
