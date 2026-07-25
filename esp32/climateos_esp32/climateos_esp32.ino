@@ -125,36 +125,45 @@ byte iconDegree[8] = {
 };
 
 
+// ── RAHASIA: WIFI & KUNCI PERANGKAT ──────────────────────────────────────────
+// Password WiFi dan DEVICE_API_KEY TIDAK ditaruh di file ini, melainkan di
+// secrets.h yang sudah masuk .gitignore. Tujuannya supaya keduanya tidak pernah
+// bisa ikut ter-push ke GitHub karena lupa dihapus sebelum commit — kalau bocor,
+// orang luar bisa mengirim data suhu palsu dan membungkam alarm dari jauh.
+//
+// Belum punya secrets.h? Salin dari contohnya:
+//     Windows  : copy secrets.h.example secrets.h
+//     Mac/Linux: cp secrets.h.example secrets.h
+// lalu isi nilai aslinya.
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#else
+  #error "File secrets.h tidak ditemukan. Salin secrets.h.example menjadi secrets.h di folder yang sama, lalu isi WiFi dan DEVICE_API_KEY."
+#endif
+
 // ── KONFIGURASI — UBAH BAGIAN INI SEBELUM FLASH ──────────────────
-// Daftar semua jaringan WiFi yang tersedia di lokasi pemasangan.
-// Firmware otomatis connect ke salah satu yang sinyalnya tersedia/terkuat.
-// Tambah/kurangi baris sesuai kebutuhan lapangan.
+// Daftar jaringan WiFi diambil dari secrets.h (WIFI_NETWORKS_LIST). Firmware
+// otomatis connect ke salah satu yang tersedia/terkuat (WiFiMulti), jadi unit
+// bisa dipindah antar ruangan tanpa flash ulang.
 struct WifiCred { const char* ssid; const char* password; };
 WifiCred WIFI_CREDENTIALS[] = {
-  { "om bob meresahkan", "ayamgeprek" },
-  // { "SSID_CADANGAN_RSND", "password_cadangan" },
+  WIFI_NETWORKS_LIST
 };
 WiFiMulti wifiMulti;
 
 // URL endpoint backend Render kamu
 #define API_ENDPOINT     "https://climateos-backend.onrender.com/api/telemetry"
 
-// ── KUNCI PERANGKAT ───────────────────────────────────────────────────────────
-// Backend memverifikasi header X-Device-Key sebelum menerima data. Tanpa ini,
-// siapa pun yang tahu URL backend bisa mengirim data suhu palsu — alarm bisa
-// dibungkam atau dipicu dari luar rumah sakit.
-//
-// Nilai di bawah HARUS SAMA PERSIS dengan variabel DEVICE_API_KEY di dashboard
-// Render (Environment > Add Environment Variable). Gunakan string acak panjang,
-// bukan kata yang mudah ditebak. Sama untuk semua 6 unit.
-//
-// Selama DEVICE_API_KEY di Render belum diisi (atau AUTH_ENFORCE belum true),
-// backend masih menerima kiriman tanpa kunci — supaya perangkat lama tidak
-// langsung mati sebelum sempat di-reflash. Setelah semua unit diperbarui,
-// aktifkan AUTH_ENFORCE=true di Render untuk mengunci sepenuhnya.
-#define DEVICE_API_KEY   "ganti-dengan-kunci-acak-panjang"
+// Catatan soal DEVICE_API_KEY (nilainya ada di secrets.h):
+// Backend memverifikasi header X-Device-Key sebelum menerima data. Selama
+// variabel DEVICE_API_KEY di Render belum diisi ATAU AUTH_ENFORCE belum true,
+// backend masih menerima kiriman tanpa kunci — supaya 6 unit yang sudah
+// terpasang tidak langsung mati sebelum sempat di-reflash. Setelah semua unit
+// diperbarui, set AUTH_ENFORCE=true di Render untuk mengunci sepenuhnya.
 
-// ID unik ruangan ini — WAJIB salah satu dari daftar di komentar atas file.
+// ── ID RUANGAN — SATU-SATUNYA BARIS YANG BERBEDA ANTAR UNIT ──────────────────
+// WAJIB salah satu dari daftar di komentar atas file. Ubah baris ini saja
+// sebelum flash tiap unit; DEVICE_API_KEY dan WiFi sama untuk semuanya.
 #define DEVICE_ID        "PERINATOLOGI-01"
 
 // Pin dan tipe sensor

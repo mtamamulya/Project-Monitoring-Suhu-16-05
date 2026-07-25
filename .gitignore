@@ -68,6 +68,12 @@ node_modules/
 # dataconnect generated files
 .dataconnect
 
+# ── Rahasia firmware ESP32 ──
+# Berisi password WiFi RSND dan DEVICE_API_KEY. TIDAK BOLEH ikut ter-commit:
+# kalau bocor, orang luar bisa mengirim data suhu palsu ke sistem monitoring.
+# File contohnya (secrets.h.example) tetap ikut supaya strukturnya terdokumentasi.
+esp32/**/secrets.h
+
 # Python
 __pycache__/
 *.py[cod]
