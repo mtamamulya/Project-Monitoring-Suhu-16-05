@@ -63,6 +63,170 @@ const State = {
 const $  = (id)  => document.getElementById(id);
 const $$ = (sel) => document.querySelectorAll(sel);
 
+// ══ TOAST & MODAL ═══════════════════════════════════════════════════════════
+// Menggantikan alert()/confirm()/prompt() bawaan browser. Selain tampilannya
+// tidak bisa diatur dan terasa asing di dashboard ini, dialog bawaan MEMBLOKIR
+// seluruh halaman — polling sensor ikut berhenti selama kotak terbuka. Untuk
+// sistem monitoring yang ditinggal terbuka di nurse station, itu tidak pantas.
+
+const _ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => _ESC_MAP[c]);
+}
+
+const _TOAST_ICONS = {
+  ok:   '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+  err:  '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+  warn: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z"/>',
+  info: '<path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+};
+
+/**
+ * Tampilkan notifikasi singkat.
+ * @param {string} message  isi pesan (boleh multi-baris pakai \n)
+ * @param {'ok'|'err'|'warn'|'info'} type
+ * @param {{title?: string, duration?: number}} opts
+ *        duration 0 = menetap sampai ditutup manual (untuk pesan penting).
+ */
+function toast(message, type = 'info', opts = {}) {
+  const wrap = $('toast-wrap');
+  if (!wrap) { console.log('[toast]', type, message); return; }
+
+  const kind = _TOAST_ICONS[type] ? type : 'info';
+  // Pesan error biasanya perlu dibaca sampai habis; pesan sukses cukup sekilas.
+  const duration = opts.duration != null
+    ? opts.duration
+    : (kind === 'err' ? 8000 : kind === 'warn' ? 6500 : 4000);
+
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.innerHTML =
+    '<svg class="toast-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">' + _TOAST_ICONS[kind] + '</svg>' +
+    '<div class="toast-body">' +
+      (opts.title ? '<strong class="toast-title">' + escHtml(opts.title) + '</strong>' : '') +
+      escHtml(message).replace(/\n/g, '<br>') +
+    '</div>' +
+    '<button class="toast-close" type="button" aria-label="Tutup">&times;</button>';
+
+  const hapus = () => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 220);
+  };
+  el.querySelector('.toast-close').addEventListener('click', hapus);
+  wrap.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  if (duration > 0) setTimeout(hapus, duration);
+
+  // Jangan biarkan menumpuk tanpa batas kalau banyak error beruntun.
+  while (wrap.children.length > 4) wrap.firstElementChild.remove();
+  return el;
+}
+window.toast = toast;
+
+let _modalResolve = null;
+
+function _closeModal(hasil) {
+  const bd = $('app-modal');
+  if (!bd) return;
+  bd.classList.remove('open');
+  document.body.style.overflow = '';
+  const r = _modalResolve;
+  _modalResolve = null;
+  if (r) r(hasil);
+}
+
+/**
+ * Modal serbaguna berbasis Promise.
+ * @param {object} o
+ *   title, sub      — judul & keterangan
+ *   bodyHtml        — isi kustom (form). Kosongkan untuk modal konfirmasi biasa.
+ *   okText, cancelText
+ *   danger          — warnai tombol OK sebagai tindakan berisiko
+ *   onOpen(box)     — dipanggil setelah tampil (mis. untuk fokus input)
+ *   validate(box)   — return string error untuk mencegah OK, atau nilai hasil
+ * @returns {Promise<any>} null kalau dibatalkan
+ */
+function showModal(o = {}) {
+  const bd = $('app-modal');
+  // Jaring pengaman: kalau markup modal hilang (mis. index.html versi lama masih
+  // ter-cache), jatuh ke confirm() bawaan. Jelek, tapi jauh lebih baik daripada
+  // tombol yang diam saja tanpa memberi tahu apa pun.
+  if (!bd) return Promise.resolve(confirm(o.title || 'Lanjutkan?') ? true : null);
+
+  // Kalau ada modal lain terbuka, tutup dulu supaya tidak saling menimpa.
+  if (_modalResolve) _closeModal(null);
+
+  const box    = bd.querySelector('.modal-box');
+  const okBtn  = $('app-modal-ok');
+  const cxlBtn = $('app-modal-cancel');
+
+  $('app-modal-title').textContent = o.title || '';
+  const subEl = $('app-modal-sub');
+  subEl.innerHTML = o.sub ? escHtml(o.sub).replace(/\n/g, '<br>') : '';
+  subEl.style.display = o.sub ? '' : 'none';
+
+  const bodyEl = $('app-modal-body');
+  bodyEl.innerHTML = o.bodyHtml || '';
+  bodyEl.style.display = o.bodyHtml ? '' : 'none';
+
+  okBtn.textContent  = o.okText || 'OK';
+  cxlBtn.textContent = o.cancelText || 'Batal';
+  cxlBtn.style.display = o.hideCancel ? 'none' : '';
+  okBtn.style.background = o.danger ? 'var(--crit)' : '';
+  okBtn.style.borderColor = o.danger ? 'var(--crit)' : '';
+  okBtn.disabled = false;
+
+  bd.classList.add('open');
+  document.body.style.overflow = 'hidden';   // cegah halaman ikut scroll
+
+  return new Promise(resolve => {
+    _modalResolve = resolve;
+
+    const onOk = () => {
+      if (typeof o.validate === 'function') {
+        const hasil = o.validate(box);
+        // validate() mengembalikan string = pesan error, hentikan.
+        if (typeof hasil === 'string') {
+          const errEl = box.querySelector('.modal-err');
+          if (errEl) { errEl.textContent = hasil; errEl.classList.add('show'); }
+          else toast(hasil, 'err');
+          return;
+        }
+        _closeModal(hasil == null ? true : hasil);
+        return;
+      }
+      _closeModal(true);
+    };
+
+    okBtn.onclick  = onOk;
+    cxlBtn.onclick = () => _closeModal(null);
+    bd.onclick     = (e) => { if (e.target === bd) _closeModal(null); };
+
+    // Esc membatalkan, Enter menyetujui (kecuali sedang mengetik di textarea).
+    const onKey = (e) => {
+      if (!bd.classList.contains('open')) { document.removeEventListener('keydown', onKey); return; }
+      if (e.key === 'Escape') { e.preventDefault(); _closeModal(null); }
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); onOk(); }
+    };
+    document.addEventListener('keydown', onKey);
+
+    if (typeof o.onOpen === 'function') setTimeout(() => o.onOpen(box), 30);
+  });
+}
+window.showModal = showModal;
+
+/** Pengganti confirm() — mengembalikan true/false, tidak memblokir halaman. */
+async function confirmDialog(title, sub, opts = {}) {
+  const hasil = await showModal({
+    title, sub,
+    okText: opts.okText || 'Ya, lanjutkan',
+    cancelText: opts.cancelText || 'Batal',
+    danger: opts.danger,
+  });
+  return hasil === true;
+}
+window.confirmDialog = confirmDialog;
+
 /**
  * fetch() yang otomatis menyertakan Firebase ID token.
  *
@@ -952,7 +1116,7 @@ function _dateStr(offsetDays) {
  */
 async function fetchAndRenderHistoryRange(startStr, endStr, rangeLabel) {
   if (!State.histDevice) {
-    alert('Pilih 1 ruangan spesifik dulu (bukan "Semua Ruangan") untuk mengambil rentang tanggal ini.');
+    toast('Pilih 1 ruangan spesifik dulu (bukan "Semua Ruangan") untuk mengambil rentang tanggal ini.', 'warn');
     return;
   }
   State.histRange = rangeLabel || (startStr + ' s/d ' + endStr);
@@ -970,7 +1134,7 @@ async function fetchAndRenderHistoryRange(startStr, endStr, rangeLabel) {
       const hint = /index/i.test(err)
         ? '\n\nComposite index Firestore untuk koleksi "telemetry" belum aktif.\nJalankan: firebase deploy --only firestore:indexes'
         : '';
-      alert('Gagal ambil data: ' + err + hint);
+      toast(err + hint, 'err', { title: 'Gagal ambil data' });
       return;
     }
     const data = (await res.json()).data || [];
@@ -980,7 +1144,7 @@ async function fetchAndRenderHistoryRange(startStr, endStr, rangeLabel) {
     renderSummary(data, State.histRange);
   } catch (e) {
     console.warn('[HistoryRange]', e.message);
-    alert('Tidak bisa terhubung ke server. Backend Render mungkin sedang bangun dari mode tidur — tunggu ~40 detik lalu coba lagi.');
+    toast('Backend Render mungkin sedang bangun dari mode tidur. Tunggu ~40 detik lalu coba lagi.', 'err', { title: 'Tidak bisa terhubung' });
   }
 }
 
@@ -1120,7 +1284,7 @@ function initSpeech() {
 
 // ── EXPORT CSV ────────────────────────────────────────────────────────────────
 function downloadCSV(labels, temps, hums, filename) {
-  if (!labels.length) { alert('Tidak ada data untuk diekspor.'); return; }
+  if (!labels.length) { toast('Tidak ada data untuk diekspor.', 'warn'); return; }
   const csv = ['Timestamp,Temperature (°C),Humidity (%)']
     .concat(labels.map((t, i) => `"${t}",${temps[i]},${hums[i]}`))
     .join('\n');
@@ -1134,9 +1298,9 @@ function downloadCSV(labels, temps, hums, filename) {
 // ── EXPORT PDF ────────────────────────────────────────────────────────────────
 function exportPDF() {
   const recs = State.historyData;
-  if (!recs.length) { alert('Tidak ada data history.'); return; }
+  if (!recs.length) { toast('Tidak ada data history.', 'warn'); return; }
   const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) { alert('Pop-up diblokir browser. Izinkan pop-up lalu coba lagi.'); return; }
+  if (!w) { toast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.', 'err', { title: 'Tidak bisa membuka jendela cetak' }); return; }
 
   // Nama ruangan untuk judul laporan
   const roomLabel = State.histDevice
@@ -1307,8 +1471,8 @@ function attachListeners() {
     if (applyRangeBtn) {
       const start = $('history-range-start')?.value;
       const end   = $('history-range-end')?.value;
-      if (!start || !end) { alert('Pilih tanggal mulai dan tanggal akhir dulu.'); return; }
-      if (start > end)    { alert('Tanggal mulai harus sebelum atau sama dengan tanggal akhir.'); return; }
+      if (!start || !end) { toast('Pilih tanggal mulai dan tanggal akhir dulu.', 'warn'); return; }
+      if (start > end)    { toast('Tanggal mulai harus sebelum atau sama dengan tanggal akhir.', 'warn'); return; }
       $$('#history-seg .seg-btn').forEach(b => b.classList.remove('active'));
       fetchAndRenderHistoryRange(start, end, start + ' s/d ' + end);
       return;
@@ -1375,6 +1539,21 @@ function attachListeners() {
     const koreksiBtn = e.target.closest('.btn-koreksi-verifikasi');
     if (koreksiBtn) {
       koreksiVerifikasi(koreksiBtn.dataset.id);
+      return;
+    }
+
+    // 13c. Perbesar tanda tangan — ukuran kecil di tabel mustahil diperiksa mata
+    const sigImg = e.target.closest('.js-sig-zoom');
+    if (sigImg) {
+      lihatTandaTangan(sigImg.dataset.sig);
+      return;
+    }
+
+    // 13d. Lihat catatan lengkap. Di tabel teksnya terpotong, dan tooltip title
+    //      tidak muncul sama sekali di layar sentuh — jadi harus bisa diketuk.
+    const catatanBtn = e.target.closest('.js-lihat-catatan');
+    if (catatanBtn) {
+      lihatCatatanVerifikasi(catatanBtn.dataset.id);
       return;
     }
 
@@ -1757,7 +1936,7 @@ async function saveRoomThreshold(row) {
   const deviceId = row.dataset.deviceId;
   const updates = {};
   row.querySelectorAll('.admin-th-input').forEach(inp => { updates[inp.dataset.field] = parseFloat(inp.value); });
-  if (Object.values(updates).some(v => Number.isNaN(v))) { alert('Semua nilai threshold harus angka.'); return; }
+  if (Object.values(updates).some(v => Number.isNaN(v))) { toast('Semua nilai threshold harus angka.', 'warn'); return; }
 
   // Feedback langsung di tombol. Tanpa ini, request yang memakan 30-60 detik
   // (cold start Render free tier) terasa seperti aplikasi hang, dan user
@@ -1785,7 +1964,7 @@ async function saveRoomThreshold(row) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setBtn(originalLabel || 'Simpan', false);
-      alert('Gagal simpan: ' + (data.error || 'unknown error'));
+      toast(data.error || 'unknown error', 'err', { title: 'Gagal simpan threshold' });
       return;
     }
     setBtn('✓ Tersimpan', true, 'var(--emerald)');
@@ -1795,8 +1974,8 @@ async function saveRoomThreshold(row) {
   } catch (e) {
     clearTimeout(slowTimer);
     setBtn(originalLabel || 'Simpan', false);
-    alert('Gagal terhubung ke server.\n\nBackend Render free tier tidur setelah ~15 menit tanpa aktivitas; ' +
-          'request pertama butuh 30-60 detik untuk membangunkannya. Tunggu sebentar lalu coba lagi.');
+    toast('Backend Render free tier tidur setelah ~15 menit tanpa aktivitas; request pertama butuh 30-60 detik untuk membangunkannya. Tunggu sebentar lalu coba lagi.',
+          'err', { title: 'Gagal terhubung ke server' });
   }
 }
 
@@ -1823,7 +2002,7 @@ async function renderVerifikatorList() {
 async function addVerifikator() {
   const input = $('admin-verifikator-name');
   const name = input?.value.trim();
-  if (!name) { alert('Nama tidak boleh kosong.'); return; }
+  if (!name) { toast('Nama verifikator tidak boleh kosong.', 'warn'); return; }
   try {
     const res = await authFetch(CONFIG.API_BASE_URL + '/api/admin/verifikators', {
       method: 'POST',
@@ -1831,17 +2010,23 @@ async function addVerifikator() {
       body: JSON.stringify({ name, added_by: _currentUserEmail }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { alert('Gagal tambah: ' + (data.error || 'unknown error')); return; }
+    if (!res.ok) { toast(data.error || 'unknown error', 'err', { title: 'Gagal tambah verifikator' }); return; }
     input.value = '';
     await renderVerifikatorList();
     renderAdminAuditLog();
   } catch (e) {
-    alert('Gagal terhubung ke server.');
+    toast('Periksa koneksi internet lalu coba lagi.', 'err', { title: 'Gagal terhubung ke server' });
   }
 }
 
 async function deleteVerifikator(id, name) {
-  if (!confirm(`Hapus verifikator "${name}"? Riwayat verifikasi yang sudah tercatat tidak akan ikut terhapus.`)) return;
+  const yakin = await confirmDialog(
+    `Hapus verifikator "${name}"?`,
+    'Riwayat verifikasi yang sudah tercatat atas nama ini TIDAK ikut terhapus — dokumen akreditasi tetap utuh. ' +
+    'Nama ini hanya tidak akan muncul lagi sebagai pilihan saat mengisi verifikasi baru.',
+    { okText: 'Ya, hapus', danger: true }
+  );
+  if (!yakin) return;
   try {
     const res = await authFetch(CONFIG.API_BASE_URL + '/api/admin/verifikators/' + encodeURIComponent(id), {
       method: 'DELETE',
@@ -1849,11 +2034,11 @@ async function deleteVerifikator(id, name) {
       body: JSON.stringify({ removed_by: _currentUserEmail }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { alert('Gagal hapus: ' + (data.error || 'unknown error')); return; }
+    if (!res.ok) { toast(data.error || 'unknown error', 'err', { title: 'Gagal hapus verifikator' }); return; }
     await renderVerifikatorList();
     renderAdminAuditLog();
   } catch (e) {
-    alert('Gagal terhubung ke server.');
+    toast('Periksa koneksi internet lalu coba lagi.', 'err', { title: 'Gagal terhubung ke server' });
   }
 }
 
@@ -2006,18 +2191,24 @@ function _showKepatuhanError(rawMessage) {
            'di dashboard Render.';
   }
 
+  const isi =
+    '<strong style="color:' + tone + ';">' + title + '</strong>' +
+    (hint ? '<br><span style="color:var(--muted);font-size:12.5px;">' + hint + '</span>' : '') +
+    (consoleUrl
+      ? '<br><a href="' + esc(consoleUrl) + '" target="_blank" rel="noopener noreferrer" ' +
+        'style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--sky);text-decoration:underline;">' +
+        'Buka status index di Firebase Console →</a>'
+      : '') +
+    '<br><span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--muted-2);' +
+    'display:inline-block;margin-top:8px;word-break:break-word;">' + esc(msgClean) + '</span>';
+
   tbody.innerHTML =
-    '<tr><td colspan="8" style="padding:20px 24px;text-align:left;line-height:1.65;">' +
-      '<strong style="color:' + tone + ';">' + title + '</strong>' +
-      (hint ? '<br><span style="color:var(--muted);font-size:12.5px;">' + hint + '</span>' : '') +
-      (consoleUrl
-        ? '<br><a href="' + esc(consoleUrl) + '" target="_blank" rel="noopener noreferrer" ' +
-          'style="display:inline-block;margin-top:8px;font-size:12.5px;color:var(--sky);text-decoration:underline;">' +
-          'Buka status index di Firebase Console →</a>'
-        : '') +
-      '<br><span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--muted-2);' +
-      'display:inline-block;margin-top:8px;word-break:break-word;">' + esc(msgClean) + '</span>' +
-    '</td></tr>';
+    '<tr><td colspan="8" style="padding:20px 24px;text-align:left;line-height:1.65;">' + isi + '</td></tr>';
+
+  // Tampilan mobile ikut dikosongkan. Kalau tidak, kartu dari permintaan
+  // sebelumnya tetap terpampang seolah datanya masih valid padahal gagal dimuat.
+  const cards = $('kepatuhan-cards');
+  if (cards) cards.innerHTML = '<div style="padding:16px 4px;line-height:1.65;font-size:13px;">' + isi + '</div>';
 }
 
 // Coba ulang otomatis selama index masih dibangun, supaya tidak perlu menunggu
@@ -2116,7 +2307,82 @@ function _entryStatus(e) {
   return { tempOk, humOk, tempMin, tempMax, humMin, humMax };
 }
 
+/**
+ * Versi kartu dari riwayat verifikasi — dipakai di layar < 768px.
+ *
+ * Di HP, tabel 8 kolom memaksa geser jauh ke kanan hanya untuk mencapai tombol
+ * Ralat; perawat hampir pasti tidak akan menemukannya. Kartu menampilkan satu
+ * entri utuh tanpa geser sama sekali, dengan tombol Ralat selebar penuh.
+ *
+ * Dirender dari array `entries` yang SAMA dengan tabel, jadi keduanya mustahil
+ * menampilkan isi yang berbeda.
+ */
+function renderKepatuhanCards(entries) {
+  const wrap = $('kepatuhan-cards');
+  if (!wrap) return;
+
+  if (!entries.length) {
+    wrap.innerHTML =
+      '<p style="padding:18px 4px;font-size:13px;color:var(--muted);line-height:1.7;">' +
+        '<strong style="color:var(--ink);">Belum ada verifikasi bulan ini.</strong><br>' +
+        'Pastikan sudah ada verifikator terdaftar di Admin → Setting, lalu isi form di atas.' +
+      '</p>';
+    return;
+  }
+
+  wrap.innerHTML = entries.slice().reverse().map(e => {
+    const d       = new Date(e.submitted_at);
+    const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    const st      = _entryStatus(e);
+
+    const nilai = (baru, asli, unit, ok) => {
+      const angka = baru != null ? baru.toFixed(1) : '—';
+      const coret = (e.corrected && asli != null && asli !== baru)
+        ? `<span class="old">${asli.toFixed(1)}${unit}</span>` : '';
+      return `<span class="vcard-num" style="color:${ok ? 'var(--emerald)' : 'var(--crit)'};">${coret}${angka}${unit}</span>`;
+    };
+
+    const badgeRalat = e.corrected
+      ? '<span style="padding:1px 6px;border-radius:5px;font-size:9.5px;font-weight:700;background:var(--amber-soft);color:var(--amber);">RALAT</span>'
+      : '';
+
+    const sig = e.signature
+      ? `<img src="${e.signature}" alt="Tanda tangan ${escHtml(e.verifikator_name || '')}" class="vcard-sig js-sig-zoom" data-sig="${escHtml(e.id)}">`
+      : '<span style="font-size:12px;color:var(--muted-2);">tanpa TTD</span>';
+
+    return `<div class="vcard ${(st.tempOk && st.humOk) ? '' : 'deviasi'}">
+      <div class="vcard-head">
+        <span class="vcard-shift">${escHtml(e.shift)} ${badgeRalat}</span>
+        <span class="vcard-date">${dateStr}</span>
+      </div>
+      <div class="vcard-vals">
+        <div class="vcard-val">
+          <span class="label">Suhu</span>
+          ${nilai(e.temperature, e.original_temperature, '°C', st.tempOk)}
+          <span class="vcard-status" style="color:${st.tempOk ? 'var(--emerald)' : 'var(--crit)'};">${st.tempOk ? 'Dalam batas' : 'Di luar ' + st.tempMin + '–' + st.tempMax + '°C'}</span>
+        </div>
+        <div class="vcard-val">
+          <span class="label">Kelembapan</span>
+          ${nilai(e.humidity, e.original_humidity, '%', st.humOk)}
+          <span class="vcard-status" style="color:${st.humOk ? 'var(--emerald)' : 'var(--crit)'};">${st.humOk ? 'Dalam batas' : 'Di luar ' + st.humMin + '–' + st.humMax + '%'}</span>
+        </div>
+      </div>
+      <div class="vcard-meta">
+        <span class="vcard-who">${escHtml(e.verifikator_name || '—')}</span>
+        ${sig}
+      </div>
+      ${e.catatan ? `<p class="vcard-note"><strong>Catatan:</strong> ${escHtml(e.catatan)}</p>` : ''}
+      ${e.tindakan ? `<p class="vcard-note"><strong>Tindakan:</strong> ${escHtml(e.tindakan)}</p>` : ''}
+      ${e.corrected
+        ? `<p class="vcard-note" style="color:var(--amber);"><strong>Diralat:</strong> ${escHtml(e.correction_reason || '')}</p>`
+        : `<button class="btn-ghost btn-koreksi-verifikasi vcard-ralat" data-id="${escHtml(e.id)}">Ralat entri ini</button>`}
+    </div>`;
+  }).join('');
+}
+
 function renderKepatuhanTable(entries) {
+  renderKepatuhanCards(entries);   // versi mobile dirender berdampingan, dari data yang sama
+
   const tbody = $('kepatuhan-tbody');
   if (!tbody) return;
   if (!entries.length) {
@@ -2136,7 +2402,7 @@ function renderKepatuhanTable(entries) {
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-  tbody.innerHTML = entries.slice().reverse().map(e => {
+  tbody.innerHTML = entries.slice().reverse().map((e, i) => {
     const d = new Date(e.submitted_at);
     const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -2150,10 +2416,18 @@ function renderKepatuhanTable(entries) {
     // Latar baris dibuat lebih lembut dan hanya sebagai penanda halus. Dengan
     // latar merah penuh, tabel yang banyak deviasinya jadi merah semua dan
     // warnanya kehilangan arti.
-    const rowBg = (st.tempOk && st.humOk) ? '' : 'background:color-mix(in srgb, var(--crit) 5%, transparent);';
+    // Zebra halus agar mata mudah mengikuti baris sampai ke kolom paling kanan;
+    // baris deviasi diberi rona merah tipis yang menimpanya.
+    const zebra = (i % 2 === 1) ? 'background:var(--bg-2);' : '';
+    const rowBg = (st.tempOk && st.humOk) ? zebra : 'background:color-mix(in srgb, var(--crit) 5%, transparent);';
+
+    // Tanda tangan diperbesar sedikit dan bisa diklik untuk dilihat penuh —
+    // ukuran 26px mustahil diperiksa keabsahannya dengan mata.
     const sig = e.signature
-      ? `<img src="${e.signature}" alt="ttd" style="height:26px;background:#fff;border-radius:3px;border:1px solid var(--hair);" />`
-      : '—';
+      ? `<img src="${e.signature}" alt="Tanda tangan ${esc(e.verifikator_name || '')}" class="js-sig-zoom"
+              data-sig="${esc(e.id)}" title="Klik untuk memperbesar"
+              style="height:32px;background:#fff;border-radius:3px;border:1px solid var(--hair);cursor:zoom-in;display:block;" />`
+      : '<span style="color:var(--muted-2);">—</span>';
     const catatan = esc(e.catatan || '—');
 
     // Nilai yang sudah diralat ditampilkan seperti pada formulir kertas: angka
@@ -2178,7 +2452,13 @@ function renderKepatuhanTable(entries) {
       <td style="padding:7px 12px;text-align:right;font-weight:600;color:${humColor};white-space:nowrap;" title="${st.humOk ? 'Dalam batas' : 'Di luar batas ' + st.humMin + '–' + st.humMax + '%'}">${withOriginal(e.humidity, e.original_humidity, '%')}</td>
       <td style="padding:7px 12px;">${esc(e.verifikator_name || '—')}</td>
       <td style="padding:7px 12px;">${sig}</td>
-      <td style="padding:7px 12px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${catatan}">${catatan}</td>
+      <td style="padding:7px 12px;color:var(--muted);max-width:180px;">
+        ${(e.catatan || e.tindakan)
+          ? `<button class="js-lihat-catatan" data-id="${esc(e.id)}" title="Lihat catatan lengkap"
+                     style="all:unset;cursor:pointer;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;
+                            white-space:nowrap;color:var(--muted);border-bottom:1px dotted var(--muted-2);">${catatan}</button>`
+          : '<span style="color:var(--muted-2);">—</span>'}
+      </td>
       <td style="padding:7px 12px;text-align:right;white-space:nowrap;">
         ${e.corrected
           ? '<span style="font-size:11px;color:var(--muted-2);">sudah diralat</span>'
@@ -2189,62 +2469,192 @@ function renderKepatuhanTable(entries) {
   }).join('');
 }
 
+/** Tampilkan tanda tangan ukuran penuh — supaya keabsahannya bisa diperiksa. */
+function lihatTandaTangan(id) {
+  const e = _kepatuhanEntries.find(x => x.id === id);
+  if (!e || !e.signature) { toast('Entri ini tidak punya tanda tangan tersimpan.', 'warn'); return; }
+  const tgl = new Date(e.submitted_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+  showModal({
+    title: 'Tanda tangan ' + (e.verifikator_name || '—'),
+    sub: `${e.shift} · ${tgl}`,
+    bodyHtml: `<img src="${escHtml(e.signature)}" alt="Tanda tangan ukuran penuh" class="sig-zoom-img">`,
+    okText: 'Tutup',
+    hideCancel: true,
+  });
+}
+window.lihatTandaTangan = lihatTandaTangan;
+
+/** Tampilkan catatan & tindakan lengkap satu entri. */
+function lihatCatatanVerifikasi(id) {
+  const e = _kepatuhanEntries.find(x => x.id === id);
+  if (!e) { toast('Entri tidak ditemukan.', 'err'); return; }
+  const tgl = new Date(e.submitted_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const blok = (judul, isi) => isi
+    ? `<div style="margin-bottom:14px;">
+         <span class="label" style="display:block;margin-bottom:4px;">${judul}</span>
+         <p style="margin:0;font-size:13.5px;line-height:1.65;color:var(--ink-2);white-space:pre-wrap;word-break:break-word;">${escHtml(isi)}</p>
+       </div>`
+    : '';
+
+  showModal({
+    title: `Catatan ${e.shift}`,
+    sub: `${e.room_name || ''} · ${tgl} · ${e.verifikator_name || '—'}`,
+    bodyHtml:
+      (blok('Catatan / Analisis', e.catatan) || '') +
+      (blok('Tindakan & Hasil', e.tindakan) || '') +
+      (e.corrected ? blok('Alasan ralat', e.correction_reason) : '') +
+      ((!e.catatan && !e.tindakan)
+        ? '<p style="margin:0;font-size:13px;color:var(--muted);">Tidak ada catatan pada entri ini.</p>' : ''),
+    okText: 'Tutup',
+    hideCancel: true,
+  });
+}
+window.lihatCatatanVerifikasi = lihatCatatanVerifikasi;
+
 /**
- * Ralat satu entri. Sengaja memakai prompt() berurutan, bukan modal khusus:
- * ini tindakan jarang (hanya saat salah ketik), dan alur bertahap justru membuat
- * petugas membaca nilai lama sebelum menggantinya.
+ * Ralat satu entri verifikasi lewat SATU modal.
+ *
+ * Versi sebelumnya memakai tiga prompt() beruntun. Itu keliru: kalau petugas
+ * membatalkan di dialog ketiga, dua isian sebelumnya hilang percuma; nilai lama
+ * tidak bisa ditampilkan berdampingan sehingga orang mengoreksi sambil menghafal;
+ * dan di HP kotak sistem itu muncul menempel di atas keyboard.
+ *
+ * Modal ini menampilkan nilai lama (dicoret) tepat di sebelah kolom isian baru,
+ * memvalidasi saat mengetik, dan tidak kehilangan apa pun sampai benar-benar
+ * disimpan.
  */
 async function koreksiVerifikasi(id) {
   const entry = _kepatuhanEntries.find(e => e.id === id);
-  if (!entry) { alert('Entri tidak ditemukan. Muat ulang halaman lalu coba lagi.'); return; }
+  if (!entry) { toast('Entri tidak ditemukan. Muat ulang halaman lalu coba lagi.', 'err'); return; }
 
-  const info = `Ralat entri ${entry.shift}, ${new Date(entry.submitted_at).toLocaleDateString('id-ID')}\n` +
-               `Nilai tercatat sekarang: ${entry.temperature}°C / ${entry.humidity}%\n\n` +
-               `Nilai lama TIDAK dihapus — tetap tersimpan dan tampil dicoret, ` +
-               `sesuai kaidah pencatatan dokumen akreditasi.`;
+  const tgl = new Date(entry.submitted_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+  const st  = _entryStatus(entry);
+  const inputStyle = "width:100%;font-size:15px;font-family:'JetBrains Mono',monospace;padding:8px 10px;height:auto;text-align:center;";
 
-  const suhuStr = prompt(info + '\n\nSuhu yang benar (°C):', String(entry.temperature));
-  if (suhuStr === null) return;
-  const humStr = prompt('Kelembaban yang benar (%):', String(entry.humidity));
-  if (humStr === null) return;
+  const hasil = await showModal({
+    title: `Ralat verifikasi ${entry.shift}`,
+    sub: `${escHtml(entry.room_name || '')} · ${tgl} · diverifikasi ${escHtml(entry.verifikator_name || '-')}`,
+    okText: 'Simpan ralat',
+    cancelText: 'Batal',
+    bodyHtml:
+      '<div class="ralat-grid">' +
+        '<div class="ralat-cell">' +
+          '<span class="label">Suhu tercatat</span>' +
+          `<span class="ralat-old">${entry.temperature != null ? entry.temperature.toFixed(1) : '—'}°C</span>` +
+        '</div>' +
+        '<div>' +
+          '<label class="label" for="ralat-temp" style="display:block;margin-bottom:5px;">Suhu yang benar (°C)</label>' +
+          `<input type="number" step="0.1" inputmode="decimal" id="ralat-temp" class="input" style="${inputStyle}" value="${entry.temperature != null ? entry.temperature : ''}">` +
+        '</div>' +
+        '<div class="ralat-cell">' +
+          '<span class="label">Kelembapan tercatat</span>' +
+          `<span class="ralat-old">${entry.humidity != null ? entry.humidity.toFixed(1) : '—'}%</span>` +
+        '</div>' +
+        '<div>' +
+          '<label class="label" for="ralat-hum" style="display:block;margin-bottom:5px;">Kelembapan yang benar (%)</label>' +
+          `<input type="number" step="0.1" inputmode="decimal" id="ralat-hum" class="input" style="${inputStyle}" value="${entry.humidity != null ? entry.humidity : ''}">` +
+        '</div>' +
+      '</div>' +
+      '<label class="label" for="ralat-alasan" style="display:block;margin-bottom:5px;">Alasan koreksi <span style="color:var(--crit);">*</span></label>' +
+      '<textarea id="ralat-alasan" class="input" rows="2" style="width:100%;font-size:13.5px;padding:8px 10px;height:auto;resize:vertical;" ' +
+        'placeholder="Contoh: Salah ketik saat input, angka 3 dan 5 tertukar."></textarea>' +
+      '<div class="modal-err" id="ralat-err"></div>' +
+      `<p style="margin:12px 0 0;font-size:12px;color:var(--muted);line-height:1.6;padding:10px 12px;background:var(--amber-soft);border-radius:9px;">` +
+        `Nilai lama <strong>tidak dihapus</strong>. Angka ${entry.temperature}°C / ${entry.humidity}% tetap tersimpan dan akan tampil dicoret ` +
+        `di tabel maupun PDF, sesuai kaidah koreksi dokumen akreditasi. Ralat hanya bisa dilakukan sekali.` +
+      `</p>`,
 
-  const suhu = parseFloat(suhuStr), hum = parseFloat(humStr);
-  if (Number.isNaN(suhu) || Number.isNaN(hum)) { alert('Suhu dan kelembaban harus angka.'); return; }
+    onOpen: (box) => {
+      const t = box.querySelector('#ralat-temp');
+      if (t) { t.focus(); t.select(); }
+      // Sembunyikan pesan error begitu petugas mulai memperbaiki isian.
+      const err = box.querySelector('#ralat-err');
+      box.querySelectorAll('#ralat-temp, #ralat-hum, #ralat-alasan').forEach(el => {
+        el.addEventListener('input', () => err && err.classList.remove('show'));
+      });
+    },
 
-  const alasan = prompt('Alasan koreksi (wajib, minimal 5 karakter).\nContoh: "Salah ketik saat input, angka tertukar."');
-  if (alasan === null) return;
-  if (alasan.trim().length < 5) { alert('Alasan koreksi terlalu pendek.'); return; }
+    // Validasi terpusat: kembalikan string = tampilkan error & modal tetap terbuka.
+    validate: (box) => {
+      const suhu   = parseFloat(box.querySelector('#ralat-temp').value);
+      const hum    = parseFloat(box.querySelector('#ralat-hum').value);
+      const alasan = box.querySelector('#ralat-alasan').value.trim();
+
+      if (Number.isNaN(suhu) || Number.isNaN(hum)) return 'Suhu dan kelembapan harus diisi angka.';
+      if (suhu < 5 || suhu > 45)   return 'Suhu di luar batas kewajaran ruangan (5–45°C). Periksa lagi.';
+      if (hum < 10 || hum > 100)   return 'Kelembapan di luar batas kewajaran (10–100%). Periksa lagi.';
+      if (alasan.length < 5)       return 'Alasan koreksi wajib diisi, minimal 5 karakter.';
+      if (suhu === entry.temperature && hum === entry.humidity) {
+        return 'Nilainya belum berubah. Ubah suhu atau kelembapan dulu, atau batalkan.';
+      }
+      return { temperature: suhu, humidity: hum, alasan };
+    },
+  });
+
+  if (!hasil || hasil === true) return;   // dibatalkan
 
   try {
     const res = await authFetch(CONFIG.API_BASE_URL + '/api/verifications/' + encodeURIComponent(id) + '/correct', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ temperature: suhu, humidity: hum, alasan: alasan.trim(), corrected_by: _currentUserEmail }),
+      body: JSON.stringify({ ...hasil, corrected_by: _currentUserEmail }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { alert('Gagal koreksi: ' + (data.error || 'unknown error')); return; }
+    if (!res.ok) { toast(data.error || 'unknown error', 'err', { title: 'Gagal menyimpan ralat' }); return; }
+    toast(`${entry.shift} ${tgl} kini tercatat ${hasil.temperature}°C / ${hasil.humidity}%. Nilai lama tetap tersimpan.`,
+          'ok', { title: 'Ralat tersimpan' });
     fetchKepatuhanData();
   } catch (e) {
-    alert('Gagal terhubung ke server.');
+    toast('Periksa koneksi internet lalu coba lagi.', 'err', { title: 'Gagal terhubung ke server' });
   }
 }
 window.koreksiVerifikasi = koreksiVerifikasi;
 
 // ── Signature pad (canvas, mouse + touch) ──────────────────────────────────────
+
+/**
+ * Samakan resolusi buffer canvas dengan ukurannya di layar.
+ *
+ * PENTING: tingginya diambil dari ukuran RENDER sebenarnya, bukan angka tetap.
+ * Di HP CSS membesarkan pad jadi 190px (jari butuh ruang lebih lega daripada
+ * mouse); kalau buffer tetap dipatok 150, koordinat gambar akan meleset dari
+ * posisi jari — tanda tangan muncul bergeser ke atas.
+ */
+function _resizeSignaturePad(canvas, ctx) {
+  const rect  = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  const w = Math.max(rect.width, 1);
+  const h = Math.max(rect.height, 1);
+
+  canvas.width  = w * ratio;
+  canvas.height = h * ratio;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);   // buang transform lama sebelum skala baru
+  ctx.scale(ratio, ratio);
+  ctx.lineWidth   = 2;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  ctx.strokeStyle = '#111';
+}
+
 function _initSignaturePad() {
   const canvas = $('kepatuhan-signature-pad');
   if (!canvas || canvas.dataset.sigInit) return;
   canvas.dataset.sigInit = '1';
   const ctx = canvas.getContext('2d');
 
-  const rect = canvas.getBoundingClientRect();
-  const ratio = window.devicePixelRatio || 1;
-  canvas.width  = Math.max(rect.width, 1) * ratio;
-  canvas.height = 150 * ratio;
-  ctx.scale(ratio, ratio);
-  ctx.lineWidth = 2;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#111';
+  _resizeSignaturePad(canvas, ctx);
+
+  // Mengubah ukuran canvas MENGHAPUS isinya, jadi hanya dilakukan saat pad masih
+  // kosong. Kalau petugas sudah menandatangani lalu memutar layar, biarkan
+  // gambarnya utuh — lebih baik sedikit meleset daripada hilang tanpa pemberitahuan.
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!_sigHasContent) _resizeSignaturePad(canvas, ctx);
+    }, 200);
+  });
 
   const getPos = (e) => {
     const r = canvas.getBoundingClientRect();
@@ -2326,10 +2736,11 @@ async function submitKepatuhanVerification() {
     // Bukan langsung ditolak: bisa jadi memang begitu kondisinya. Tanyakan dulu,
     // lalu kirim ulang dengan penegasan kalau petugas yakin.
     if (res.status === 422 && data.reason === 'implausible_value') {
-      const lanjut = confirm(
-        data.error + '\n\n' +
-        'Klik OK kalau angka ini memang benar dan tetap ingin disimpan.\n' +
-        'Klik Cancel untuk kembali memperbaiki isian.'
+      const lanjut = await confirmDialog(
+        'Nilai di luar batas kewajaran',
+        data.error + '\n\nKalau angka ini memang benar-benar terbaca di alat ukur, lanjutkan menyimpan. ' +
+        'Kalau ragu, batalkan dan periksa lagi isiannya.',
+        { okText: 'Angka sudah benar, simpan', cancelText: 'Perbaiki dulu' }
       );
       if (!lanjut) { setMsg('Dibatalkan — perbaiki nilainya lalu simpan lagi.', 'var(--amber)'); return; }
       setMsg('Menyimpan…');
@@ -2342,9 +2753,10 @@ async function submitKepatuhanVerification() {
     if (res.status === 409 && data.reason === 'duplicate_shift') {
       setMsg(data.error, 'var(--crit)');
       if (data.existing_id) {
-        const keRalat = confirm(
-          data.error + '\n\n' +
-          'Buka form ralat untuk entri tersebut sekarang?'
+        const keRalat = await confirmDialog(
+          'Shift ini sudah diisi hari ini',
+          data.error + '\n\nBuka form ralat untuk entri tersebut sekarang?',
+          { okText: 'Buka form ralat', cancelText: 'Nanti saja' }
         );
         if (keRalat) {
           // Entri duplikat selalu bertanggal HARI INI. Kalau tabel sedang
@@ -2380,13 +2792,21 @@ async function submitKepatuhanVerification() {
 
 function exportKepatuhanPDF() {
   if (!_kepatuhanEntries.length) {
-    alert('Tidak ada data verifikasi untuk diekspor.\n\n' +
-          'Laporan PDF dibuat dari entri verifikasi shift, bukan dari data sensor otomatis.\n' +
-          'Langkah agar terisi:\n' +
-          '1. Admin → Setting → tambahkan minimal 1 nama verifikator\n' +
-          '2. Kembali ke halaman ini, isi form verifikasi (shift, suhu, kelembaban, nama, tanda tangan)\n' +
-          '3. Klik Simpan Verifikasi — ulangi tiap shift (Pagi/Siang/Malam)\n\n' +
-          'Kalau tabel di bawah menampilkan pesan merah, itu kegagalan server, bukan data kosong — baca pesannya.');
+    showModal({
+      title: 'Belum ada data untuk diekspor',
+      sub: 'Laporan PDF dibuat dari entri verifikasi shift, bukan dari data sensor otomatis.',
+      bodyHtml:
+        '<ol style="margin:0;padding-left:20px;font-size:13.5px;line-height:1.75;color:var(--ink-2);">' +
+          '<li><strong>Admin → Setting</strong> — tambahkan minimal 1 nama verifikator.</li>' +
+          '<li>Kembali ke halaman ini, isi form verifikasi: shift, suhu, kelembapan, nama, tanda tangan.</li>' +
+          '<li>Klik <strong>Simpan Verifikasi</strong>. Ulangi tiap shift — Pagi, Siang, Malam.</li>' +
+        '</ol>' +
+        '<p style="margin:14px 0 0;font-size:12.5px;color:var(--muted);line-height:1.6;">' +
+          'Kalau tabel di bawah menampilkan pesan merah, itu kegagalan server — bukan data kosong. Baca pesannya.' +
+        '</p>',
+      okText: 'Mengerti',
+      hideCancel: true,
+    });
     return;
   }
   const room     = ROOM_CONFIG.find(r => r.id === $('kepatuhan-room')?.value);
@@ -2396,7 +2816,7 @@ function exportKepatuhanPDF() {
   const humImg   = kepatuhanChartHum  ? kepatuhanChartHum.toBase64Image()  : '';
 
   const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) { alert('Pop-up diblokir browser. Izinkan pop-up lalu coba lagi.'); return; }
+  if (!w) { toast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.', 'err', { title: 'Tidak bisa membuka jendela cetak' }); return; }
 
   let adaRalat = false;
   const rows = _kepatuhanEntries.map((e, i) => {
@@ -2536,6 +2956,7 @@ async function init() {
   initSpeech();
   attachListeners();
   startClock();
+  setText('footer-year', String(new Date().getFullYear()));  // dulu ditulis tetap di HTML
   await fetchRooms();   // Pastikan ROOM_CONFIG sudah terisi sebelum polling dimulai
   startPolling();
   initAuth();
@@ -2739,7 +3160,13 @@ if ($('login-form')) {
  * station, jadi logout tak sengaja berarti monitoring berhenti tampil.
  */
 async function performLogout() {
-  if (!confirm('Keluar dari akun?\n\nMonitoring akan berhenti ditampilkan sampai ada yang masuk kembali.')) return;
+  const yakin = await confirmDialog(
+    'Keluar dari akun?',
+    'Monitoring akan berhenti ditampilkan sampai ada yang masuk kembali. ' +
+    'Sensor tetap merekam dan alarm tetap terkirim ke Telegram/Discord.',
+    { okText: 'Ya, keluar', danger: true }
+  );
+  if (!yakin) return;
   closeMoreSheet();
   try {
     if (typeof firebase !== 'undefined' && firebase.auth) {

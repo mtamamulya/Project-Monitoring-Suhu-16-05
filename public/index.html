@@ -392,7 +392,7 @@
     }
 
     /* ── Pembungkus tabel agar bisa digeser horizontal di layar sempit ──
-       Tabel Admin (8 kolom) dan Kepatuhan (7 kolom) mustahil muat di HP;
+       Tabel Admin (8 kolom) dan Kepatuhan (8 kolom) mustahil muat di HP;
        tanpa ini layout jebol keluar viewport. */
     .table-scroll {
       width: 100%;
@@ -400,6 +400,193 @@
       -webkit-overflow-scrolling: touch;
     }
     .table-scroll > table { min-width: 640px; }
+
+    /* ══ TOAST ══
+       Menggantikan alert() bawaan browser. alert() memblokir seluruh halaman,
+       tampilannya tidak bisa diatur, dan di HP muncul sebagai kotak sistem yang
+       terasa seperti error aplikasi — padahal sebagian besar pesannya cuma
+       konfirmasi "tersimpan". */
+    .toast-wrap {
+      position: fixed;
+      top: 14px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      width: max-content; max-width: min(460px, calc(100vw - 24px));
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      display: flex; align-items: flex-start; gap: 10px;
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--hair);
+      background: var(--card);
+      box-shadow: var(--shadow-lg);
+      font-size: 13.5px; line-height: 1.5; color: var(--ink-2);
+      opacity: 0; transform: translateY(-10px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast-icon { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; }
+    .toast-body { flex: 1; min-width: 0; word-break: break-word; }
+    .toast-title { font-weight: 650; color: var(--ink); display: block; margin-bottom: 1px; }
+    .toast-close {
+      flex-shrink: 0; background: none; border: none; cursor: pointer;
+      color: var(--muted-2); padding: 0 2px; font-size: 16px; line-height: 1;
+    }
+    .toast.ok    { border-left: 3px solid var(--emerald); }
+    .toast.ok    .toast-icon { color: var(--emerald); }
+    .toast.err   { border-left: 3px solid var(--crit); }
+    .toast.err   .toast-icon { color: var(--crit); }
+    .toast.warn  { border-left: 3px solid var(--amber); }
+    .toast.warn  .toast-icon { color: var(--amber); }
+    .toast.info  { border-left: 3px solid var(--sky); }
+    .toast.info  .toast-icon { color: var(--sky); }
+
+    /* Di HP toast muncul dari BAWAH, di atas bottom nav — lebih dekat jempol
+       dan tidak menutupi judul halaman. */
+    @media (max-width: 767px) {
+      .toast-wrap {
+        top: auto;
+        bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+        max-width: calc(100vw - 20px);
+        width: calc(100vw - 20px);
+      }
+      .toast { transform: translateY(10px); }
+      .toast.show { transform: translateY(0); }
+    }
+
+    /* ══ MODAL ══
+       Untuk konfirmasi dan form pendek (ralat verifikasi). Menggantikan
+       confirm() dan rangkaian prompt() yang tidak bisa didesain dan kehilangan
+       isian kalau dibatalkan di tengah. */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 210;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+      display: none; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal-box {
+      width: 100%; max-width: 480px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      background: var(--card);
+      border: 1px solid var(--hair);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      transform: scale(0.97); opacity: 0;
+      transition: transform 0.16s ease, opacity 0.16s ease;
+    }
+    .modal-backdrop.open .modal-box { transform: scale(1); opacity: 1; }
+
+    .modal-head { padding: 18px 20px 0; }
+    .modal-title { font-size: 16px; font-weight: 650; color: var(--ink); letter-spacing: -0.01em; margin: 0; }
+    .modal-sub { font-size: 12.5px; color: var(--muted); margin: 5px 0 0; line-height: 1.55; }
+    .modal-body { padding: 16px 20px 4px; }
+    .modal-foot {
+      padding: 14px 20px 18px;
+      display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
+    }
+    .modal-foot .btn-primary, .modal-foot .btn-ghost { min-height: 40px; padding: 9px 16px; font-size: 13.5px; }
+
+    /* Perbandingan nilai lama vs baru pada modal ralat */
+    .ralat-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      margin-bottom: 14px;
+    }
+    .ralat-cell {
+      padding: 10px 12px; border-radius: 10px; background: var(--bg-2);
+      border: 1px solid var(--hair-2);
+    }
+    .ralat-cell .label { display: block; margin-bottom: 5px; }
+    .ralat-old {
+      font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600;
+      color: var(--muted-2); text-decoration: line-through;
+    }
+    .modal-err {
+      display: none; margin-top: 4px; font-size: 12.5px; color: var(--crit); line-height: 1.5;
+    }
+    .modal-err.show { display: block; }
+
+    /* Tanda tangan yang diperbesar saat diklik */
+    .sig-zoom-img {
+      max-width: 100%; max-height: 60vh;
+      background: #fff; border-radius: 10px; border: 1px solid var(--hair);
+      display: block; margin: 0 auto;
+    }
+
+    @media (max-width: 480px) {
+      .modal-box { max-width: 100%; border-radius: 14px; }
+      .modal-foot { flex-direction: column-reverse; }
+      .modal-foot .btn-primary, .modal-foot .btn-ghost { width: 100%; justify-content: center; }
+      .ralat-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ══ RIWAYAT VERIFIKASI SEBAGAI KARTU (mobile) ══
+       Tabel 8 kolom (min-width 640px) memaksa geser jauh ke kanan untuk mencapai
+       tombol Ralat — di HP praktis tidak akan ditemukan perawat. Di bawah 768px
+       tabel disembunyikan dan digantikan daftar kartu: semua informasi satu entri
+       terlihat sekaligus tanpa geser sama sekali. Isi keduanya dirender dari data
+       yang sama, jadi tidak ada risiko keduanya berbeda. */
+    .kepatuhan-cards { display: none; }
+
+    @media (max-width: 767px) {
+      #kepatuhan-table-wrap { display: none; }
+      .kepatuhan-cards { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+    }
+
+    .vcard {
+      border: 1px solid var(--hair);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: var(--card);
+    }
+    .vcard.deviasi { border-left: 3px solid var(--crit); }
+
+    .vcard-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 8px; margin-bottom: 10px;
+    }
+    .vcard-shift { font-size: 14.5px; font-weight: 650; color: var(--ink); }
+    .vcard-date  { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+    .vcard-vals { display: flex; gap: 18px; margin-bottom: 10px; }
+    .vcard-val  { display: flex; flex-direction: column; gap: 2px; }
+    .vcard-val .label { font-size: 10.5px; }
+    .vcard-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 19px; font-weight: 650; line-height: 1.15;
+    }
+    .vcard-num .old {
+      font-size: 13px; font-weight: 400; color: var(--muted-2);
+      text-decoration: line-through; margin-right: 5px;
+    }
+    .vcard-status { font-size: 10.5px; font-weight: 600; }
+
+    .vcard-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding-top: 10px; border-top: 1px solid var(--hair-2);
+    }
+    .vcard-who { font-size: 12.5px; color: var(--ink-2); min-width: 0; }
+    .vcard-note {
+      font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.55;
+      word-break: break-word;   /* catatan panjang tampil PENUH, tidak dipotong */
+    }
+    .vcard-sig {
+      height: 34px; background: #fff; border-radius: 4px;
+      border: 1px solid var(--hair); cursor: zoom-in;
+    }
+    /* Tombol Ralat di kartu dibuat selebar penuh & tinggi 44px — target sentuh
+       yang layak, dan tidak mungkin terlewat seperti di tabel. */
+    .vcard-ralat {
+      width: 100%; min-height: 44px; margin-top: 10px;
+      justify-content: center; font-size: 13px;
+    }
 
     /* ── Pages ── */
     .page { display: none; }
@@ -805,6 +992,28 @@
       .room-card-readings { grid-template-columns: 1fr 1fr; }
     }
 
+    @media (max-width: 767px) {
+      /* Kontrol halaman Kepatuhan: dropdown ruangan dipaksa lebar 200px sehingga
+         di HP menumpuk jadi tiga baris berantakan. Di sini dibuat rapi:
+         ruangan + bulan sebaris, dua tombol sebaris di bawahnya. */
+      #page-kepatuhan > div:first-child > div:last-child {
+        width: 100%;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      #kepatuhan-room { min-width: 0 !important; grid-column: 1 / -1; }
+      #kepatuhan-month { min-width: 0; grid-column: 1 / -1; }
+      #btn-kepatuhan-load, #btn-kepatuhan-pdf {
+        min-height: 42px; justify-content: center;
+      }
+
+      /* Tanda tangan butuh ruang lebih lega saat digambar pakai jari
+         dibanding pakai mouse. */
+      #kepatuhan-signature-pad { height: 190px !important; }
+      #kepatuhan-signature-pad + *, .sig-wrap { max-width: 100% !important; }
+    }
+
     @media (max-width: 480px) {
       .bento-grid { grid-template-columns: 1fr !important; }
       .stats-grid { grid-template-columns: 1fr 1fr !important; }
@@ -817,6 +1026,14 @@
       .room-reading-value { font-size: 17px !important; }
       #history-room-filter { min-width: 130px !important; }
       .top-header .text-muted-2 { display: none; }
+
+      /* Header terlalu padat di layar kecil: pill sensor + tombol "Aktifkan
+         Suara"/"Aktifkan Notif" + bell + tema berebut satu baris. Teks tombol
+         disembunyikan (ikonnya tetap jelas), dan pill diringkas. */
+      #btn-alarm-sound, #notif-enable-btn { padding: 6px 8px !important; gap: 0 !important; font-size: 0 !important; }
+      #btn-alarm-sound svg, #notif-enable-btn svg { width: 16px; height: 16px; }
+      #header-sensor-pill { font-size: 10.5px; padding: 3px 7px; }
+      .top-header { gap: 6px; }
     }
 
     /* ── Room Status Cards ── */
@@ -1980,7 +2197,10 @@
             <div style="padding: 14px 18px; border-bottom: 1px solid var(--hair);">
               <span class="label-strong">Riwayat Verifikasi Bulan Ini</span>
             </div>
-            <div class="table-scroll">
+            <!-- Daftar kartu — hanya tampil di layar < 768px (lihat CSS .kepatuhan-cards) -->
+            <div class="kepatuhan-cards" id="kepatuhan-cards"></div>
+
+            <div class="table-scroll" id="kepatuhan-table-wrap">
               <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
                 <thead>
                   <tr style="background: var(--bg-2);">
@@ -1995,7 +2215,7 @@
                   </tr>
                 </thead>
                 <tbody id="kepatuhan-tbody">
-                  <tr><td colspan="7" style="padding:24px;text-align:center;color:var(--muted-2);">Pilih ruangan &amp; bulan, lalu klik Tampilkan.</td></tr>
+                  <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--muted-2);">Pilih ruangan &amp; bulan, lalu klik Tampilkan.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -2010,7 +2230,7 @@
         <div class="divider"></div>
         <div style="padding: 14px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
           <span class="text-muted" style="font-size: 12px; font-weight: 500;">MediClimate RS · ESP32 + Firebase + Gemini</span>
-          <span class="text-muted-2 mono" style="font-size: 11px;">Semarang · 2026</span>
+          <span class="text-muted-2 mono" style="font-size: 11px;">Semarang · <span id="footer-year">2026</span></span>
           <span id="footer-time" class="pill mono" style="font-size: 11px;">—</span>
         </div>
       </footer>
@@ -2141,6 +2361,24 @@
         <button id="btn-send" class="btn-primary" style="padding: 8px 12px; white-space: nowrap;">
           <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TOAST & MODAL ══
+       Wadah untuk notifikasi dan dialog in-app. Isinya dibangun oleh app.js. -->
+  <div class="toast-wrap" id="toast-wrap" aria-live="polite" aria-atomic="false"></div>
+
+  <div class="modal-backdrop" id="app-modal" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 class="modal-title" id="app-modal-title">—</h2>
+        <p class="modal-sub" id="app-modal-sub"></p>
+      </div>
+      <div class="modal-body" id="app-modal-body"></div>
+      <div class="modal-foot">
+        <button type="button" class="btn-ghost" id="app-modal-cancel">Batal</button>
+        <button type="button" class="btn-primary" id="app-modal-ok">OK</button>
       </div>
     </div>
   </div>
