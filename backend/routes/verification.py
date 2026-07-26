@@ -12,17 +12,110 @@ import logging
 from datetime import datetime, timezone
 
 from services.config import ROOM_CONFIG, VERIFIKATOR_LIST
-from services.timeutil import month_bounds_utc
+from services.timeutil import month_bounds_utc, day_bounds_utc, WIB
 
 logger = logging.getLogger(__name__)
 
+
+class DuplicateShiftError(ValueError):
+    """
+    Shift yang sama untuk ruangan & hari yang sama sudah pernah diisi.
+    Membawa id entri yang sudah ada supaya frontend bisa langsung menawarkan
+    "buka ralat entri itu" alih-alih sekadar menampilkan pesan gagal.
+    """
+    def __init__(self, message, existing_id=None):
+        super().__init__(message)
+        self.existing_id = existing_id
+
+
+class ImplausibleValueError(ValueError):
+    """Nilai di luar batas kewajaran fisik — kemungkinan besar salah ketik."""
+    pass
+
 VALID_SHIFTS = {"Pagi", "Siang", "Malam"}
+
+# Batas kewajaran fisik untuk ruangan rumah sakit ber-AC. Nilai di luar ini
+# hampir pasti salah ketik (mis. 3°C padahal maksud 23°C, atau 445% kelembapan).
+# Ini SENGAJA jauh lebih longgar daripada threshold Permenkes: tugasnya bukan
+# menilai kepatuhan, tapi menangkap jari yang salah pencet. Deviasi asli seperti
+# AC mati (30°C) harus tetap bisa dicatat apa adanya.
+SANITY_TEMP_MIN, SANITY_TEMP_MAX = 5.0, 45.0
+SANITY_HUM_MIN,  SANITY_HUM_MAX  = 10.0, 100.0
+
+
+def evaluate_ranges(room: dict, temperature: float, humidity: float) -> dict:
+    """
+    Nilai suhu dan kelembapan SECARA TERPISAH.
+
+    Kenapa terpisah: sebelumnya hanya ada satu penanda gabungan `in_range`, dan
+    tampilan mewarnai kedua kolom memakai penanda itu. Akibatnya entri 23°C / 34%
+    membuat kolom SUHU ikut merah, padahal 23°C masuk rentang 15-25 — yang
+    melanggar cuma kelembapannya. Perawat jadi tidak tahu mana yang harus
+    ditindak, dan auditor melihat pelanggaran suhu yang sebenarnya tidak ada.
+
+    `in_range` gabungan tetap dihitung dan disimpan untuk kompatibilitas dengan
+    data lama serta perhitungan skor kepatuhan.
+    """
+    temp_ok = room["tempMin"] <= temperature <= room["tempMax"]
+    hum_ok  = room["humMin"]  <= humidity    <= room["humMax"]
+    return {
+        "temp_in_range": temp_ok,
+        "hum_in_range":  hum_ok,
+        "in_range":      temp_ok and hum_ok,
+    }
+
+
+def check_sanity(temperature: float, humidity: float) -> str:
+    """
+    Kembalikan pesan peringatan kalau nilai di luar batas kewajaran fisik,
+    atau string kosong kalau wajar. Dipakai untuk MEMPERINGATKAN, bukan menolak —
+    keputusan akhir tetap di tangan petugas yang melihat alat ukurnya langsung.
+    """
+    if not (SANITY_TEMP_MIN <= temperature <= SANITY_TEMP_MAX):
+        return (f"Suhu {temperature}°C di luar batas kewajaran ruangan "
+                f"({SANITY_TEMP_MIN:.0f}-{SANITY_TEMP_MAX:.0f}°C). Periksa lagi — kemungkinan salah ketik.")
+    if not (SANITY_HUM_MIN <= humidity <= SANITY_HUM_MAX):
+        return (f"Kelembapan {humidity}% di luar batas kewajaran "
+                f"({SANITY_HUM_MIN:.0f}-{SANITY_HUM_MAX:.0f}%). Periksa lagi — kemungkinan salah ketik.")
+    return ""
+
+
+def find_existing_shift(db, device_id: str, shift: str, when=None):
+    """
+    Cari entri verifikasi yang SUDAH ADA untuk ruangan + shift + hari (WIB) yang sama.
+    Return dict entri kalau ketemu, None kalau belum ada.
+    """
+    if db is None:
+        return None
+    ref = when or datetime.now(timezone.utc)
+    ref_wib = ref.astimezone(WIB)
+    start, end = day_bounds_utc(ref_wib.year, ref_wib.month, ref_wib.day)
+
+    # Tanpa order_by — jadi query ini sudah tercakup composite index yang sama
+    # dengan get_verifications (device_id + submitted_at). Tidak perlu index baru.
+    # Filter shift dilakukan di Python karena jumlah dokumen per hari maksimal 3.
+    query = (
+        db.collection("verifications")
+        .where("device_id", "==", device_id)
+        .where("submitted_at", ">=", start)
+        .where("submitted_at", "<", end)
+    )
+    for d in query.stream():
+        v = d.to_dict()
+        # device_id diperiksa ulang di sini, tidak hanya mengandalkan filter
+        # Firestore. Kalau suatu saat query diubah/salah tulis, kesalahannya akan
+        # berupa "duplikat tidak terdeteksi" — bukan "entri ruangan lain dianggap
+        # duplikat", yang jauh lebih merusak karena memblokir pencatatan yang sah.
+        if v.get("device_id") == device_id and v.get("shift") == shift:
+            v["id"] = d.id
+            return v
+    return None
 
 
 def submit_verification(db, device_id: str, shift: str, verifikator_id: str,
                          temperature, humidity, signature: str,
                          catatan: str = "", tindakan: str = "",
-                         submitted_by: str = "") -> dict:
+                         submitted_by: str = "", allow_extreme: bool = False) -> dict:
     """Simpan 1 entri verifikasi shift. Melempar ValueError kalau input tidak valid."""
     if db is None:
         raise RuntimeError("Database not connected")
@@ -46,8 +139,32 @@ def submit_verification(db, device_id: str, shift: str, verifikator_id: str,
     if not signature or not isinstance(signature, str) or len(signature) < 50:
         raise ValueError("Tanda tangan digital wajib diisi")
 
+    # ── Cegah shift ganda ────────────────────────────────────────────────────
+    # Permenkes mensyaratkan TEPAT 3 pencatatan per hari (Pagi/Siang/Malam).
+    # Dua entri untuk shift yang sama membuat auditor tidak bisa menentukan mana
+    # catatan yang sah — apalagi kalau angkanya berbeda. Kalau petugas ingin
+    # membetulkan entri yang sudah ada, jalurnya adalah RALAT (yang menyimpan
+    # jejak nilai lama), bukan menambah entri baru yang menimpa maknanya.
+    existing = find_existing_shift(db, device_id, shift)
+    if existing:
+        raise DuplicateShiftError(
+            f"Shift {shift} untuk {ROOM_CONFIG[device_id]['name']} hari ini sudah diisi "
+            f"({existing.get('temperature')}°C / {existing.get('humidity')}% "
+            f"oleh {existing.get('verifikator_name', '-')}). "
+            f"Kalau nilainya keliru, gunakan tombol Ralat pada entri tersebut.",
+            existing_id=existing["id"],
+        )
+
+    # ── Peringatan nilai tidak masuk akal ────────────────────────────────────
+    # Ditolak pada percobaan pertama supaya salah ketik tertangkap, tapi bisa
+    # dilanjutkan kalau petugas menegaskan angkanya memang benar (allow_extreme).
+    if not allow_extreme:
+        warn = check_sanity(temperature, humidity)
+        if warn:
+            raise ImplausibleValueError(warn)
+
     room = ROOM_CONFIG[device_id]
-    in_range = (room["tempMin"] <= temperature <= room["tempMax"]) and (room["humMin"] <= humidity <= room["humMax"])
+    ranges = evaluate_ranges(room, temperature, humidity)
 
     now = datetime.now(timezone.utc)
     doc = {
@@ -58,7 +175,10 @@ def submit_verification(db, device_id: str, shift: str, verifikator_id: str,
         "verifikator_name": verifikator["name"],
         "temperature":      temperature,
         "humidity":         humidity,
-        "in_range":         in_range,
+        # Status dinilai terpisah — lihat evaluate_ranges() untuk alasannya.
+        "temp_in_range":    ranges["temp_in_range"],
+        "hum_in_range":     ranges["hum_in_range"],
+        "in_range":         ranges["in_range"],
         "signature":        signature,   # base64 PNG data URL dari signature pad frontend
         "catatan":          (catatan or "").strip(),
         "tindakan":         (tindakan or "").strip(),
@@ -97,6 +217,7 @@ def get_verifications(db, device_id: str, year: int, month: int) -> list:
         .order_by("submitted_at", direction="ASCENDING")
     )
 
+    room = ROOM_CONFIG[device_id]
     results = []
     for d in query.stream():
         v = d.to_dict()
@@ -105,6 +226,15 @@ def get_verifications(db, device_id: str, year: int, month: int) -> list:
         cts = v.get("corrected_at")
         if cts is not None:
             v["corrected_at"] = cts.isoformat() if hasattr(cts, "isoformat") else str(cts)
+
+        # Entri yang ditulis SEBELUM pemisahan status ini hanya punya `in_range`
+        # gabungan. Hitung ulang temp/hum secara terpisah saat dibaca, supaya
+        # tampilan mewarnai kolom dengan benar tanpa perlu migrasi data Firestore.
+        if v.get("temp_in_range") is None or v.get("hum_in_range") is None:
+            t, h = v.get("temperature"), v.get("humidity")
+            if isinstance(t, (int, float)) and isinstance(h, (int, float)):
+                v.update(evaluate_ranges(room, float(t), float(h)))
+
         v["id"] = d.id
         results.append(v)
     return results
@@ -162,8 +292,7 @@ def correct_verification(db, verification_id: str, temperature, humidity,
     room = ROOM_CONFIG.get(device_id)
     if not room:
         raise ValueError("Ruangan entri ini sudah tidak terdaftar")
-    in_range = (room["tempMin"] <= temperature <= room["tempMax"]) and \
-               (room["humMin"] <= humidity <= room["humMax"])
+    ranges = evaluate_ranges(room, temperature, humidity)
 
     updates = {
         # Simpan nilai asli — inilah yang membuat koreksi bisa diaudit.
@@ -172,7 +301,9 @@ def correct_verification(db, verification_id: str, temperature, humidity,
         "original_in_range":    existing.get("in_range"),
         "temperature":          temperature,
         "humidity":             humidity,
-        "in_range":             in_range,
+        "temp_in_range":        ranges["temp_in_range"],
+        "hum_in_range":         ranges["hum_in_range"],
+        "in_range":             ranges["in_range"],
         "corrected":            True,
         "corrected_at":         datetime.now(timezone.utc),
         "corrected_by":         (corrected_by or "unknown").strip(),

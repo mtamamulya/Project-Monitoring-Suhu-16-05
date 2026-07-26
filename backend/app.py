@@ -703,8 +703,24 @@ def submit_verification():
             catatan=body.get("catatan", ""),
             tindakan=body.get("tindakan", ""),
             submitted_by=actor_email(""),
+            allow_extreme=bool(body.get("allow_extreme", False)),
         )
         return jsonify(result), 201
+    except verification_routes.DuplicateShiftError as exc:
+        # 409 Conflict, bukan 400 — frontend memakai kode ini untuk menawarkan
+        # "buka ralat entri yang sudah ada" alih-alih sekadar menampilkan error.
+        return jsonify({
+            "error":       str(exc),
+            "reason":      "duplicate_shift",
+            "existing_id": exc.existing_id,
+        }), 409
+    except verification_routes.ImplausibleValueError as exc:
+        # 422 — nilainya bisa saja benar, tapi perlu ditegaskan dulu oleh petugas.
+        # Frontend menampilkan konfirmasi lalu mengirim ulang dengan allow_extreme.
+        return jsonify({
+            "error":  str(exc),
+            "reason": "implausible_value",
+        }), 422
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:

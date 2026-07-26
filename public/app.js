@@ -2073,16 +2073,47 @@ function renderKepatuhanCharts(entries, room) {
     const d = new Date(e.submitted_at);
     return d.getDate() + (shiftLetter[e.shift] || '?');
   });
-  // Titik hitam = dalam batas normal, merah = di luar batas — meniru tinta merah di form kertas RSND
-  const colors = entries.map(e => e.in_range ? '#18181B' : '#DC2626');
+  // Titik hitam = dalam batas, merah = di luar batas — meniru tinta merah di form
+  // kertas RSND. Grafik suhu diwarnai berdasarkan status SUHU saja, grafik
+  // kelembapan berdasarkan status KELEMBAPAN saja. Sebelumnya keduanya memakai
+  // penanda gabungan, sehingga titik pada grafik suhu bisa merah gara-gara
+  // kelembapannya yang menyimpang — menyesatkan saat dibaca auditor.
+  const tempColors = entries.map(e => _entryStatus(e).tempOk ? '#18181B' : '#DC2626');
+  const humColors  = entries.map(e => _entryStatus(e).humOk  ? '#18181B' : '#DC2626');
 
   if (kepatuhanChartTemp) { kepatuhanChartTemp.destroy(); kepatuhanChartTemp = null; }
   if (kepatuhanChartHum)  { kepatuhanChartHum.destroy();  kepatuhanChartHum  = null; }
 
   const tempCanvas = $('kepatuhan-chart-temp');
   const humCanvas   = $('kepatuhan-chart-hum');
-  if (tempCanvas) kepatuhanChartTemp = _buildKepatuhanChart(tempCanvas, labels, entries.map(e => e.temperature), colors, room.tempMin, room.tempMax, '°C');
-  if (humCanvas)  kepatuhanChartHum  = _buildKepatuhanChart(humCanvas,  labels, entries.map(e => e.humidity),    colors, room.humMin,  room.humMax,  '%');
+  if (tempCanvas) kepatuhanChartTemp = _buildKepatuhanChart(tempCanvas, labels, entries.map(e => e.temperature), tempColors, room.tempMin, room.tempMax, '°C');
+  if (humCanvas)  kepatuhanChartHum  = _buildKepatuhanChart(humCanvas,  labels, entries.map(e => e.humidity),    humColors,  room.humMin,  room.humMax,  '%');
+}
+
+/**
+ * Status satu entri verifikasi — suhu dan kelembapan dinilai TERPISAH.
+ *
+ * Backend sudah mengirim temp_in_range/hum_in_range (termasuk hasil hitung ulang
+ * untuk entri lama). Kalau karena suatu hal field itu tidak ada, dihitung lagi
+ * di sini dari threshold ruangan supaya tampilan tidak pernah jatuh kembali ke
+ * penanda gabungan yang menyesatkan.
+ */
+function _entryStatus(e) {
+  const room = ROOM_CONFIG.find(r => r.id === e.device_id) ||
+               ROOM_CONFIG.find(r => r.id === $('kepatuhan-room')?.value) || {};
+  const tempMin = room.tempMin != null ? room.tempMin : 15;
+  const tempMax = room.tempMax != null ? room.tempMax : 25;
+  const humMin  = room.humMin  != null ? room.humMin  : 45;
+  const humMax  = room.humMax  != null ? room.humMax  : 55;
+
+  const tempOk = (e.temp_in_range != null)
+    ? !!e.temp_in_range
+    : (typeof e.temperature === 'number' && e.temperature >= tempMin && e.temperature <= tempMax);
+  const humOk = (e.hum_in_range != null)
+    ? !!e.hum_in_range
+    : (typeof e.humidity === 'number' && e.humidity >= humMin && e.humidity <= humMax);
+
+  return { tempOk, humOk, tempMin, tempMax, humMin, humMax };
 }
 
 function renderKepatuhanTable(entries) {
@@ -2108,8 +2139,18 @@ function renderKepatuhanTable(entries) {
   tbody.innerHTML = entries.slice().reverse().map(e => {
     const d = new Date(e.submitted_at);
     const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-    const rowBg = e.in_range ? '' : 'background:var(--crit-soft);';
-    const valColor = e.in_range ? 'var(--emerald)' : 'var(--crit)';
+
+    // Suhu dan kelembapan dinilai SENDIRI-SENDIRI. Sebelumnya kedua kolom
+    // memakai satu warna dari `in_range` gabungan, sehingga entri 23°C / 34%
+    // membuat kolom suhu ikut merah padahal 23°C normal — perawat tidak bisa
+    // tahu mana yang sebenarnya perlu ditindak.
+    const st = _entryStatus(e);
+    const tempColor = st.tempOk ? 'var(--emerald)' : 'var(--crit)';
+    const humColor  = st.humOk  ? 'var(--emerald)' : 'var(--crit)';
+    // Latar baris dibuat lebih lembut dan hanya sebagai penanda halus. Dengan
+    // latar merah penuh, tabel yang banyak deviasinya jadi merah semua dan
+    // warnanya kehilangan arti.
+    const rowBg = (st.tempOk && st.humOk) ? '' : 'background:color-mix(in srgb, var(--crit) 5%, transparent);';
     const sig = e.signature
       ? `<img src="${e.signature}" alt="ttd" style="height:26px;background:#fff;border-radius:3px;border:1px solid var(--hair);" />`
       : '—';
@@ -2133,8 +2174,8 @@ function renderKepatuhanTable(entries) {
     return `<tr style="border-bottom:1px solid var(--hair);${rowBg}">
       <td style="padding:7px 12px;white-space:nowrap;">${dateStr}</td>
       <td style="padding:7px 12px;white-space:nowrap;">${esc(e.shift)}${tandaKoreksi}</td>
-      <td style="padding:7px 12px;text-align:right;font-weight:600;color:${valColor};white-space:nowrap;">${withOriginal(e.temperature, e.original_temperature, '°C')}</td>
-      <td style="padding:7px 12px;text-align:right;font-weight:600;color:${valColor};white-space:nowrap;">${withOriginal(e.humidity, e.original_humidity, '%')}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:600;color:${tempColor};white-space:nowrap;" title="${st.tempOk ? 'Dalam batas' : 'Di luar batas ' + st.tempMin + '–' + st.tempMax + '°C'}">${withOriginal(e.temperature, e.original_temperature, '°C')}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:600;color:${humColor};white-space:nowrap;" title="${st.humOk ? 'Dalam batas' : 'Di luar batas ' + st.humMin + '–' + st.humMax + '%'}">${withOriginal(e.humidity, e.original_humidity, '%')}</td>
       <td style="padding:7px 12px;">${esc(e.verifikator_name || '—')}</td>
       <td style="padding:7px 12px;">${sig}</td>
       <td style="padding:7px 12px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${catatan}">${catatan}</td>
@@ -2262,16 +2303,65 @@ async function submitKepatuhanVerification() {
   if (!signature)                       { setMsg('Tanda tangan wajib diisi.', 'var(--crit)'); return; }
 
   const btn = $('btn-kepatuhan-submit');
+  const kirim = async (allowExtreme) => {
+    return authFetch(CONFIG.API_BASE_URL + '/api/verifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: deviceId, shift, verifikator_id: verifikatorId,
+        temperature: temp, humidity: hum, signature, catatan, tindakan,
+        allow_extreme: !!allowExtreme,
+      }),
+    });
+  };
+
   if (btn) btn.disabled = true;
   setMsg('Menyimpan…');
 
   try {
-    const res = await authFetch(CONFIG.API_BASE_URL + '/api/verifications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id: deviceId, shift, verifikator_id: verifikatorId, temperature: temp, humidity: hum, signature, catatan, tindakan }),
-    });
-    const data = await res.json().catch(() => ({}));
+    let res  = await kirim(false);
+    let data = await res.json().catch(() => ({}));
+
+    // 422 = nilai di luar batas kewajaran fisik (mis. 3°C di ruang bersalin).
+    // Bukan langsung ditolak: bisa jadi memang begitu kondisinya. Tanyakan dulu,
+    // lalu kirim ulang dengan penegasan kalau petugas yakin.
+    if (res.status === 422 && data.reason === 'implausible_value') {
+      const lanjut = confirm(
+        data.error + '\n\n' +
+        'Klik OK kalau angka ini memang benar dan tetap ingin disimpan.\n' +
+        'Klik Cancel untuk kembali memperbaiki isian.'
+      );
+      if (!lanjut) { setMsg('Dibatalkan — perbaiki nilainya lalu simpan lagi.', 'var(--amber)'); return; }
+      setMsg('Menyimpan…');
+      res  = await kirim(true);
+      data = await res.json().catch(() => ({}));
+    }
+
+    // 409 = shift ini sudah pernah diisi hari ini. Jangan cuma bilang gagal —
+    // arahkan ke jalur yang benar, yaitu meralat entri yang sudah ada.
+    if (res.status === 409 && data.reason === 'duplicate_shift') {
+      setMsg(data.error, 'var(--crit)');
+      if (data.existing_id) {
+        const keRalat = confirm(
+          data.error + '\n\n' +
+          'Buka form ralat untuk entri tersebut sekarang?'
+        );
+        if (keRalat) {
+          // Entri duplikat selalu bertanggal HARI INI. Kalau tabel sedang
+          // menampilkan bulan lain, entri itu tidak ada di _kepatuhanEntries —
+          // pindahkan dulu tampilannya ke bulan berjalan supaya ketemu.
+          const now = new Date();
+          const bulanIni = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+          if ($('kepatuhan-month') && $('kepatuhan-month').value !== bulanIni) {
+            $('kepatuhan-month').value = bulanIni;
+          }
+          await fetchKepatuhanData();
+          koreksiVerifikasi(data.existing_id);
+        }
+      }
+      return;
+    }
+
     if (!res.ok) { setMsg('Gagal: ' + (data.error || 'unknown error'), 'var(--crit)'); return; }
 
     setMsg('✓ Verifikasi tersimpan.', 'var(--emerald)');
@@ -2313,7 +2403,11 @@ function exportKepatuhanPDF() {
     const d = new Date(e.submitted_at);
     const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
     const bg = i % 2 === 0 ? '#fff' : '#f9f9f7';
-    const vColor = e.in_range ? '#059669' : '#DC2626';
+    // Warna per kolom, bukan per baris — supaya di dokumen cetak pun terlihat
+    // jelas parameter MANA yang menyimpang.
+    const st = _entryStatus(e);
+    const tColor = st.tempOk ? '#059669' : '#DC2626';
+    const hColor = st.humOk  ? '#059669' : '#DC2626';
     const sigImg = e.signature ? `<img src="${e.signature}" style="height:22px;">` : '—';
 
     // Entri yang diralat dicetak dengan nilai lama dicoret, sama seperti koreksi
@@ -2332,8 +2426,8 @@ function exportKepatuhanPDF() {
 
     return `<tr style="background:${bg}">
       <td style="padding:6px 10px;">${dateStr}</td><td style="padding:6px 10px;">${e.shift}${tandaRalat}</td>
-      <td style="padding:6px 10px;text-align:right;color:${vColor};font-weight:700;">${nilai(e.temperature, e.original_temperature, '°C')}</td>
-      <td style="padding:6px 10px;text-align:right;color:${vColor};font-weight:700;">${nilai(e.humidity, e.original_humidity, '%')}</td>
+      <td style="padding:6px 10px;text-align:right;color:${tColor};font-weight:700;">${nilai(e.temperature, e.original_temperature, '°C')}</td>
+      <td style="padding:6px 10px;text-align:right;color:${hColor};font-weight:700;">${nilai(e.humidity, e.original_humidity, '%')}</td>
       <td style="padding:6px 10px;">${e.verifikator_name || '—'}</td>
       <td style="padding:6px 10px;">${sigImg}</td>
       <td style="padding:6px 10px;font-size:11px;">${catatanCetak}</td>
