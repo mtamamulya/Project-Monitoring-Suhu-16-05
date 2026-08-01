@@ -115,8 +115,20 @@ def find_existing_shift(db, device_id: str, shift: str, when=None):
 def submit_verification(db, device_id: str, shift: str, verifikator_id: str,
                          temperature, humidity, signature: str,
                          catatan: str = "", tindakan: str = "",
-                         submitted_by: str = "", allow_extreme: bool = False) -> dict:
-    """Simpan 1 entri verifikasi shift. Melempar ValueError kalau input tidak valid."""
+                         submitted_by: str = "", allow_extreme: bool = False,
+                         sumber_nilai: str = "manual", sensor_waktu=None) -> dict:
+    """
+    Simpan 1 entri verifikasi shift. Melempar ValueError kalau input tidak valid.
+
+    sumber_nilai: "sensor" kalau angkanya terisi otomatis dari pembacaan alat,
+    "manual" kalau diketik petugas. Ini WAJIB tercatat jujur.
+
+    Kalau angka diisi mesin, yang diverifikasi petugas bukan lagi "saya membaca
+    termometer dan menuliskannya", melainkan "saya hadir mengecek pada waktu ini
+    dan menyaksikan angka tersebut". Tanda tangannya tetap bermakna, tapi laporan
+    harus menyatakan asal angkanya apa adanya — kalau tidak, auditor bisa
+    menganggap ada pencatatan yang tidak sesuai kenyataan.
+    """
     if db is None:
         raise RuntimeError("Database not connected")
     if device_id not in ROOM_CONFIG:
@@ -138,6 +150,32 @@ def submit_verification(db, device_id: str, shift: str, verifikator_id: str,
 
     if not signature or not isinstance(signature, str) or len(signature) < 50:
         raise ValueError("Tanda tangan digital wajib diisi")
+
+    # ── Jangan percaya begitu saja klaim "dari sensor" ───────────────────────
+    # Nilai sumber_nilai datang dari browser, dan browser bisa saja mengaku
+    # "sensor" padahal angkanya diketik tangan. Untuk catatan akreditasi, klaim
+    # yang tidak bisa dibuktikan sama saja dengan tidak ada.
+    #
+    # Karena itu klaim dicocokkan dengan pembacaan yang benar-benar ada di buffer.
+    # Kalau tidak cocok, klaimnya diturunkan jadi "manual" — bukan ditolak,
+    # karena angkanya sendiri mungkin benar; yang salah cuma pengakuannya.
+    sumber_nilai = sumber_nilai if sumber_nilai in ("sensor", "manual") else "manual"
+    if sumber_nilai == "sensor":
+        cocok = False
+        try:
+            from services.buffer import get_latest
+            rec = get_latest(device_id)
+            if rec:
+                cocok = (abs(float(rec["temperature"]) - temperature) <= 0.6 and
+                         abs(float(rec["humidity"]) - humidity) <= 2.0)
+                if cocok and sensor_waktu is None:
+                    sensor_waktu = rec.get("timestamp")
+        except Exception as exc:
+            logger.warning("Gagal memeriksa klaim sumber sensor: %s", exc)
+        if not cocok:
+            logger.info("Klaim 'sensor' tidak cocok dengan pembacaan %s — dicatat sebagai manual.", device_id)
+            sumber_nilai = "manual"
+            sensor_waktu = None
 
     # ── Cegah shift ganda ────────────────────────────────────────────────────
     # Permenkes mensyaratkan TEPAT 3 pencatatan per hari (Pagi/Siang/Malam).
@@ -188,6 +226,12 @@ def submit_verification(db, device_id: str, shift: str, verifikator_id: str,
         # 'siapa yang mengetik' dan 'siapa yang bertanggung jawab klinis' dicatat
         # terpisah. Penting untuk telusur audit kalau ada entri dipertanyakan.
         "submitted_by":     (submitted_by or "").strip(),
+        # Asal angka: "sensor" (terisi otomatis) atau "manual" (diketik petugas).
+        # Dicatat supaya laporan akreditasi jujur menyatakan dari mana nilainya.
+        "sumber_nilai":     sumber_nilai,
+        # Waktu pembacaan sensor yang dipakai — membuktikan angkanya tidak diambil
+        # dari jam lain. Kosong kalau diisi manual.
+        "sensor_waktu":     sensor_waktu,
         # Penanda koreksi — diisi kalau entri ini kemudian diralat.
         "corrected":        False,
     }
@@ -196,6 +240,8 @@ def submit_verification(db, device_id: str, shift: str, verifikator_id: str,
     out = dict(doc)
     out["id"] = doc_ref.id
     out["submitted_at"] = now.isoformat()
+    if hasattr(out.get("sensor_waktu"), "isoformat"):
+        out["sensor_waktu"] = out["sensor_waktu"].isoformat()
     return out
 
 
@@ -223,9 +269,15 @@ def get_verifications(db, device_id: str, year: int, month: int) -> list:
         v = d.to_dict()
         ts = v.get("submitted_at")
         v["submitted_at"] = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
-        cts = v.get("corrected_at")
-        if cts is not None:
-            v["corrected_at"] = cts.isoformat() if hasattr(cts, "isoformat") else str(cts)
+        for key in ("corrected_at", "sensor_waktu"):
+            val = v.get(key)
+            if val is not None:
+                v[key] = val.isoformat() if hasattr(val, "isoformat") else str(val)
+
+        # Entri yang ditulis sebelum fitur isi-otomatis ada tidak punya field ini.
+        # Anggap manual — memang begitu kenyataannya saat itu.
+        if v.get("sumber_nilai") is None:
+            v["sumber_nilai"] = "manual"
 
         # Entri yang ditulis SEBELUM pemisahan status ini hanya punya `in_range`
         # gabungan. Hitung ulang temp/hum secara terpisah saat dibaca, supaya

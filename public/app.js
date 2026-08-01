@@ -1557,6 +1557,10 @@ function attachListeners() {
       return;
     }
 
+    // 13e. Kepatuhan — ambil ulang nilai dari sensor
+    const ambilBtn = e.target.closest('#btn-ambil-sensor');
+    if (ambilBtn) { ambilNilaiSensor(true); return; }
+
     // 14. Kepatuhan — tampilkan data ruangan+bulan terpilih
     const kepLoadBtn = e.target.closest('#btn-kepatuhan-load');
     if (kepLoadBtn) { fetchKepatuhanData(); return; }
@@ -2082,6 +2086,15 @@ function _populateKepatuhanRoomFilter() {
   const prev = sel.value;
   sel.innerHTML = ROOM_CONFIG.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
   if (prev) sel.value = prev;
+
+  // Ganti ruangan berarti sensornya lain — nilai lama harus diganti, bukan
+  // dibiarkan. Kalau tidak, angka ruangan A bisa tersimpan atas nama ruangan B.
+  if (!sel.dataset.listenerAttached) {
+    sel.dataset.listenerAttached = '1';
+    sel.addEventListener('change', () => {
+      if (State.currentPage === 'kepatuhan') ambilNilaiSensor();
+    });
+  }
 }
 
 async function _populateVerifikatorDropdown() {
@@ -2097,6 +2110,107 @@ async function _populateVerifikatorDropdown() {
   }
 }
 
+// ── ISI OTOMATIS DARI SENSOR ──────────────────────────────────────────────────
+// Perawat tidak perlu lagi mengetik angka: kolom suhu & kelembapan diisi dari
+// pembacaan sensor terkini, tinggal pilih nama lalu tanda tangan.
+//
+// Tapi angkanya TETAP bisa diubah. Ini bukan kelonggaran yang tidak perlu —
+// kalau sensor rusak atau petugas mengukur dengan alat lain, angka manual harus
+// tetap bisa dimasukkan. Yang penting, asal angkanya tercatat jujur di laporan.
+
+let _sumberNilai = 'manual';        // 'sensor' selama nilai belum disentuh petugas
+let _nilaiSensorTerakhir = null;    // untuk mendeteksi apakah petugas mengubahnya
+
+const _IKON_SUMBER = {
+  ok:    '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+  warn:  '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z"/>',
+  err:   '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+  tulis: '<path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>',
+};
+
+function _setKotakSumber(jenis, teks, warna, bg) {
+  const box = $('kepatuhan-sumber-box');
+  if (!box) return;
+  box.style.display    = 'flex';
+  box.style.background = bg;
+  box.style.color      = warna;
+  box.style.border     = '1px solid ' + warna;
+  const ikon = $('kepatuhan-sumber-ikon');
+  if (ikon) { ikon.innerHTML = _IKON_SUMBER[jenis] || _IKON_SUMBER.tulis; ikon.style.color = warna; }
+  const t = $('kepatuhan-sumber-teks');
+  if (t) t.innerHTML = teks;
+}
+
+/** Tandai bahwa nilai sekarang diketik petugas, bukan lagi dari sensor. */
+function _tandaiManual() {
+  if (_sumberNilai === 'manual') return;
+  _sumberNilai = 'manual';
+  _setKotakSumber('tulis',
+    'Nilai <strong>diubah manual</strong> oleh petugas. Akan dicatat sebagai entri manual di laporan.',
+    'var(--amber)', 'var(--amber-soft)');
+}
+
+/**
+ * Ambil pembacaan sensor terkini dan isikan ke form.
+ * @param {boolean} diminta true kalau dipicu tombol (tampilkan toast), false saat otomatis
+ */
+async function ambilNilaiSensor(diminta = false) {
+  const deviceId = $('kepatuhan-room')?.value;
+  const inpT = $('kepatuhan-temp'), inpH = $('kepatuhan-hum');
+  if (!deviceId || !inpT || !inpH) return;
+
+  _setKotakSumber('warn', 'Mengambil pembacaan sensor…', 'var(--muted)', 'var(--bg-2)');
+
+  try {
+    const res = await authFetch(CONFIG.API_BASE_URL + '/api/reading-now?device_id=' + encodeURIComponent(deviceId));
+    const d = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      _sumberNilai = 'manual';
+      _setKotakSumber('err', 'Gagal menghubungi server. Isi suhu dan kelembapan secara manual.',
+                      'var(--crit)', 'var(--crit-soft)');
+      return;
+    }
+
+    // Sensor mati atau belum pernah kirim: JANGAN diisi diam-diam dengan angka lama.
+    // Angka basi yang tampak resmi jauh lebih berbahaya daripada kolom kosong.
+    if (!d.usable) {
+      inpT.value = ''; inpH.value = '';
+      _sumberNilai = 'manual';
+      _nilaiSensorTerakhir = null;
+      _setKotakSumber('err',
+        escHtml(d.message || 'Sensor tidak tersedia.') +
+        ' Entri ini akan dicatat sebagai <strong>manual</strong>.',
+        'var(--crit)', 'var(--crit-soft)');
+      return;
+    }
+
+    inpT.value = d.temperature;
+    inpH.value = d.humidity;
+    _sumberNilai = 'sensor';
+    _nilaiSensorTerakhir = { t: String(d.temperature), h: String(d.humidity) };
+
+    const jam = new Date(d.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    if (d.status === 'stale') {
+      _setKotakSumber('warn',
+        `Terisi dari sensor, pembacaan pukul <strong>${jam}</strong>. ${escHtml(d.message)}`,
+        'var(--amber)', 'var(--amber-soft)');
+    } else {
+      _setKotakSumber('ok',
+        `Terisi otomatis dari sensor, pembacaan pukul <strong>${jam}</strong>. ` +
+        'Periksa sekilas, lalu pilih nama dan tanda tangan.',
+        'var(--emerald)', 'var(--emerald-soft)');
+    }
+    if (diminta) toast('Nilai diperbarui dari sensor.', 'ok');
+
+  } catch (e) {
+    _sumberNilai = 'manual';
+    _setKotakSumber('err', 'Tidak bisa terhubung ke server. Isi suhu dan kelembapan secara manual.',
+                    'var(--crit)', 'var(--crit-soft)');
+  }
+}
+window.ambilNilaiSensor = ambilNilaiSensor;
+
 async function loadKepatuhanPage() {
   const monthInput = $('kepatuhan-month');
   if (monthInput && !monthInput.value) {
@@ -2107,8 +2221,30 @@ async function loadKepatuhanPage() {
   if (roomSel && !roomSel.value && ROOM_CONFIG.length) roomSel.value = ROOM_CONFIG[0].id;
 
   _initSignaturePad();
+  _pasangPemantauUbahNilai();
   await _populateVerifikatorDropdown();
+  ambilNilaiSensor();      // isi otomatis begitu halaman dibuka
   fetchKepatuhanData();
+}
+
+/**
+ * Pantau apakah petugas mengubah angka yang tadinya dari sensor.
+ *
+ * Ini yang membuat catatan "dari sensor" bisa dipercaya: begitu satu digit pun
+ * diubah, entri langsung berpindah status jadi manual. Tanpa ini, angka yang
+ * sudah diedit tetap mengaku berasal dari sensor — dan itu catatan yang keliru.
+ */
+function _pasangPemantauUbahNilai() {
+  ['kepatuhan-temp', 'kepatuhan-hum'].forEach(id => {
+    const el = $(id);
+    if (!el || el.dataset.pantauInit) return;
+    el.dataset.pantauInit = '1';
+    el.addEventListener('input', () => {
+      if (_sumberNilai !== 'sensor' || !_nilaiSensorTerakhir) return;
+      const t = $('kepatuhan-temp')?.value, h = $('kepatuhan-hum')?.value;
+      if (t !== _nilaiSensorTerakhir.t || h !== _nilaiSensorTerakhir.h) _tandaiManual();
+    });
+  });
 }
 
 async function fetchKepatuhanData() {
@@ -2345,6 +2481,9 @@ function renderKepatuhanCards(entries) {
     const badgeRalat = e.corrected
       ? '<span style="padding:1px 6px;border-radius:5px;font-size:9.5px;font-weight:700;background:var(--amber-soft);color:var(--amber);">RALAT</span>'
       : '';
+    const badgeManual = (e.sumber_nilai === 'manual')
+      ? '<span style="padding:1px 5px;border-radius:5px;font-size:9px;font-weight:700;background:var(--bg-2);color:var(--muted);border:1px solid var(--hair);">MANUAL</span>'
+      : '';
 
     const sig = e.signature
       ? `<img src="${e.signature}" alt="Tanda tangan ${escHtml(e.verifikator_name || '')}" class="vcard-sig js-sig-zoom" data-sig="${escHtml(e.id)}">`
@@ -2352,7 +2491,7 @@ function renderKepatuhanCards(entries) {
 
     return `<div class="vcard ${(st.tempOk && st.humOk) ? '' : 'deviasi'}">
       <div class="vcard-head">
-        <span class="vcard-shift">${escHtml(e.shift)} ${badgeRalat}</span>
+        <span class="vcard-shift">${escHtml(e.shift)} ${badgeRalat} ${badgeManual}</span>
         <span class="vcard-date">${dateStr}</span>
       </div>
       <div class="vcard-vals">
@@ -2445,9 +2584,18 @@ function renderKepatuhanTable(entries) {
                      background:var(--amber-soft);color:var(--amber);vertical-align:middle;">RALAT</span>`
       : '';
 
+    // Entri yang angkanya diketik tangan dibedakan dari yang terisi otomatis.
+    // Auditor perlu tahu mana yang berasal dari alat dan mana dari pengukuran
+    // manual — keduanya sah, tapi artinya berbeda.
+    const tandaManual = (e.sumber_nilai === 'manual')
+      ? `<span title="Suhu &amp; kelembapan diisi manual oleh petugas, bukan dari sensor"
+              style="display:inline-block;margin-left:5px;padding:1px 5px;border-radius:5px;font-size:9px;font-weight:700;
+                     background:var(--bg-2);color:var(--muted);border:1px solid var(--hair);vertical-align:middle;">MANUAL</span>`
+      : '';
+
     return `<tr style="border-bottom:1px solid var(--hair);${rowBg}">
       <td style="padding:7px 12px;white-space:nowrap;">${dateStr}</td>
-      <td style="padding:7px 12px;white-space:nowrap;">${esc(e.shift)}${tandaKoreksi}</td>
+      <td style="padding:7px 12px;white-space:nowrap;">${esc(e.shift)}${tandaKoreksi}${tandaManual}</td>
       <td style="padding:7px 12px;text-align:right;font-weight:600;color:${tempColor};white-space:nowrap;" title="${st.tempOk ? 'Dalam batas' : 'Di luar batas ' + st.tempMin + '–' + st.tempMax + '°C'}">${withOriginal(e.temperature, e.original_temperature, '°C')}</td>
       <td style="padding:7px 12px;text-align:right;font-weight:600;color:${humColor};white-space:nowrap;" title="${st.humOk ? 'Dalam batas' : 'Di luar batas ' + st.humMin + '–' + st.humMax + '%'}">${withOriginal(e.humidity, e.original_humidity, '%')}</td>
       <td style="padding:7px 12px;">${esc(e.verifikator_name || '—')}</td>
@@ -2712,6 +2860,26 @@ async function submitKepatuhanVerification() {
   if (!verifikatorId)                   { setMsg('Pilih nama verifikator.', 'var(--crit)'); return; }
   if (!signature)                       { setMsg('Tanda tangan wajib diisi.', 'var(--crit)'); return; }
 
+  // Ingatkan kalau jam pengisian jauh dari jam shift resmi. Bukan menolak —
+  // keterlambatan wajar terjadi saat ruangan sedang sibuk. Yang penting petugas
+  // sadar bahwa angka sensor yang terisi adalah angka SEKARANG, bukan angka jam
+  // shift tersebut, sehingga tidak mengira sedang mencatat keadaan beberapa jam lalu.
+  const JAM_SHIFT = { Pagi: 7, Siang: 14, Malam: 22 };
+  const sekarang = new Date();
+  const selisihJam = Math.abs(sekarang.getHours() + sekarang.getMinutes() / 60 - JAM_SHIFT[shift]);
+  if (selisihJam > 3 && selisihJam < 21) {   // <21 supaya Malam 22.00 diisi 01.00 tidak salah hitung
+    const lanjut = await confirmDialog(
+      `Mengisi shift ${shift} di luar jamnya`,
+      `Shift ${shift} dijadwalkan pukul ${String(JAM_SHIFT[shift]).padStart(2, '0')}.00, ` +
+      `sedangkan sekarang pukul ${sekarang.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}.\n\n` +
+      (_sumberNilai === 'sensor'
+        ? 'Angka yang terisi adalah pembacaan sensor SAAT INI, bukan pembacaan pada jam shift tersebut.'
+        : 'Pastikan angka yang diisi memang hasil pengukuran pada shift tersebut.'),
+      { okText: 'Ya, tetap simpan', cancelText: 'Batal' }
+    );
+    if (!lanjut) { setMsg('Dibatalkan.', 'var(--amber)'); return; }
+  }
+
   const btn = $('btn-kepatuhan-submit');
   const kirim = async (allowExtreme) => {
     return authFetch(CONFIG.API_BASE_URL + '/api/verifications', {
@@ -2721,6 +2889,9 @@ async function submitKepatuhanVerification() {
         device_id: deviceId, shift, verifikator_id: verifikatorId,
         temperature: temp, humidity: hum, signature, catatan, tindakan,
         allow_extreme: !!allowExtreme,
+        // Asal angka ikut dikirim, tapi backend tetap mencocokkannya dengan
+        // pembacaan sensor sungguhan sebelum mempercayainya.
+        sumber_nilai: _sumberNilai,
       }),
     });
   };
@@ -2776,12 +2947,23 @@ async function submitKepatuhanVerification() {
 
     if (!res.ok) { setMsg('Gagal: ' + (data.error || 'unknown error'), 'var(--crit)'); return; }
 
-    setMsg('✓ Verifikasi tersimpan.', 'var(--emerald)');
-    if ($('kepatuhan-temp'))     $('kepatuhan-temp').value = '';
-    if ($('kepatuhan-hum'))      $('kepatuhan-hum').value = '';
+    // Backend bisa MENURUNKAN klaim 'sensor' jadi 'manual' kalau angkanya tidak
+    // cocok dengan pembacaan sungguhan. Beri tahu petugas kalau itu terjadi,
+    // supaya tidak mengira entrinya tercatat sebagai otomatis.
+    if (_sumberNilai === 'sensor' && data.sumber_nilai === 'manual') {
+      toast('Angka tidak cocok dengan pembacaan sensor, jadi dicatat sebagai entri manual.',
+            'warn', { title: 'Tersimpan sebagai manual' });
+      setMsg('✓ Tersimpan (dicatat manual).', 'var(--amber)');
+    } else {
+      setMsg('✓ Verifikasi tersimpan.', 'var(--emerald)');
+    }
+
     if ($('kepatuhan-catatan'))  $('kepatuhan-catatan').value = '';
     if ($('kepatuhan-tindakan')) $('kepatuhan-tindakan').value = '';
     clearSignaturePad();
+    // Isi ulang dari sensor untuk shift berikutnya, alih-alih mengosongkan kolom.
+    // Kalau dikosongkan, petugas harus mengetik lagi — persis yang mau dihindari.
+    ambilNilaiSensor();
     fetchKepatuhanData();
   } catch (e) {
     setMsg('Gagal terhubung ke server.', 'var(--crit)');
@@ -2818,7 +3000,7 @@ function exportKepatuhanPDF() {
   const w = window.open('', '_blank', 'width=900,height=700');
   if (!w) { toast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.', 'err', { title: 'Tidak bisa membuka jendela cetak' }); return; }
 
-  let adaRalat = false;
+  let adaRalat = false, adaManual = false;
   const rows = _kepatuhanEntries.map((e, i) => {
     const d = new Date(e.submitted_at);
     const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -2834,18 +3016,22 @@ function exportKepatuhanPDF() {
     // pada formulir kertas — auditor harus bisa melihat jejaknya di dokumen cetak,
     // bukan hanya di layar.
     if (e.corrected) adaRalat = true;
+    if (e.sumber_nilai === 'manual') adaManual = true;
     const nilai = (baru, asli, unit) => {
       const s = baru != null ? baru.toFixed(1) + unit : '—';
       if (!e.corrected || asli == null || asli === baru) return s;
       return `<s style="color:#999;font-weight:400;">${asli.toFixed(1)}${unit}</s> ${s}`;
     };
     const tandaRalat = e.corrected ? ' <sup style="color:#B45309;font-weight:700;">R</sup>' : '';
+    // Penanda M = angka diisi manual, bukan dari sensor. Wajib tampil di dokumen
+    // cetak supaya auditor tahu asal setiap angka.
+    const tandaManual = (e.sumber_nilai === 'manual') ? ' <sup style="color:#555;font-weight:700;">M</sup>' : '';
     const catatanCetak = e.corrected
       ? `${(e.catatan || '').slice(0, 40)} <em style="color:#B45309;">[Ralat: ${(e.correction_reason || '').slice(0, 40)}]</em>`
       : (e.catatan || '').slice(0, 60);
 
     return `<tr style="background:${bg}">
-      <td style="padding:6px 10px;">${dateStr}</td><td style="padding:6px 10px;">${e.shift}${tandaRalat}</td>
+      <td style="padding:6px 10px;">${dateStr}</td><td style="padding:6px 10px;">${e.shift}${tandaRalat}${tandaManual}</td>
       <td style="padding:6px 10px;text-align:right;color:${tColor};font-weight:700;">${nilai(e.temperature, e.original_temperature, '°C')}</td>
       <td style="padding:6px 10px;text-align:right;color:${hColor};font-weight:700;">${nilai(e.humidity, e.original_humidity, '%')}</td>
       <td style="padding:6px 10px;">${e.verifikator_name || '—'}</td>
@@ -2858,6 +3044,12 @@ function exportKepatuhanPDF() {
     ? '<p style="margin-top:10px;font-size:10.5px;color:#666;"><sup style="color:#B45309;font-weight:700;">R</sup> ' +
       'Entri diralat. Nilai yang dicoret adalah angka yang tercatat semula; nilai di sebelahnya adalah hasil koreksi. ' +
       'Nilai asli sengaja tidak dihapus agar koreksi dapat ditelusuri.</p>'
+    : '';
+
+  const ketManual = adaManual
+    ? '<p style="margin-top:6px;font-size:10.5px;color:#666;"><sup style="color:#555;font-weight:700;">M</sup> ' +
+      'Suhu dan kelembapan pada entri ini diisi manual oleh petugas dari alat ukur, bukan diambil otomatis dari sensor ruangan. ' +
+      'Umumnya karena sensor sedang tidak mengirim data saat pencatatan dilakukan.</p>'
     : '';
 
   w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8">
@@ -2879,6 +3071,7 @@ ${humImg ? `<div><strong style="font-size:13px;">Grafik Kelembaban</strong><br><
 <table><thead><tr><th>Tanggal</th><th>Shift</th><th>Suhu</th><th>Hum</th><th>Verifikator</th><th>TTD</th><th>Catatan</th></tr></thead>
 <tbody>${rows}</tbody></table>
 ${ketRalat}
+${ketManual}
 <div style="margin-top:42px;display:flex;justify-content:space-between;gap:40px;page-break-inside:avoid;">
   <div style="flex:1;text-align:center;">
     <div style="font-size:11.5px;color:#555;">Semarang, ${new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})}</div>

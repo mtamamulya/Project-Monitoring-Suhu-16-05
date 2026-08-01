@@ -719,6 +719,7 @@ def submit_verification():
             tindakan=body.get("tindakan", ""),
             submitted_by=actor_email(""),
             allow_extreme=bool(body.get("allow_extreme", False)),
+            sumber_nilai=body.get("sumber_nilai", "manual"),
         )
         return jsonify(result), 201
     except verification_routes.DuplicateShiftError as exc:
@@ -741,6 +742,56 @@ def submit_verification():
     except Exception as exc:
         logger.error("submit_verification error: %s", exc)
         return jsonify({"error": f"Gagal simpan verifikasi: {exc}"}), 500
+
+
+@app.route("/api/reading-now", methods=["GET"])
+@require_user
+def reading_now():
+    """
+    Pembacaan sensor terkini satu ruangan, khusus untuk mengisi form verifikasi.
+
+    Berbeda dari /api/latest yang sekadar memberi angka: endpoint ini juga menilai
+    KELAYAKAN angka itu untuk dipakai sebagai catatan resmi. Form verifikasi tidak
+    boleh terisi diam-diam dengan angka basi — kalau sensor sudah lama tidak
+    mengirim, yang terisi bukan keadaan ruangan sekarang, dan catatannya jadi
+    tidak benar.
+    """
+    device_id = request.args.get("device_id")
+    if not device_id or device_id not in ROOM_CONFIG:
+        return jsonify({"error": "device_id wajib diisi dan harus ruangan terdaftar"}), 400
+
+    record = get_latest(device_id)
+    if not record:
+        return jsonify({
+            "status":  "never",
+            "usable":  False,
+            "message": "Sensor ruangan ini belum pernah mengirim data.",
+        })
+
+    umur = (datetime.now(timezone.utc) - record["timestamp"]).total_seconds()
+
+    # Ambang kelayakan. 15 menit dipilih karena sensor mengirim tiap 1 menit —
+    # kalau sudah 15 kali lewat tanpa kabar, jelas ada yang tidak beres.
+    if umur > 900:
+        status, usable = "offline", False
+        message = (f"Data terakhir {int(umur // 60)} menit lalu — sensor kemungkinan mati. "
+                   f"Isi suhu dan kelembapan secara manual dari alat ukur.")
+    elif umur > 300:
+        status, usable = "stale", True
+        message = f"Data terakhir {int(umur // 60)} menit lalu. Periksa apakah masih sesuai keadaan ruangan."
+    else:
+        status, usable = "online", True
+        message = ""
+
+    return jsonify({
+        "status":      status,
+        "usable":      usable,
+        "message":     message,
+        "temperature": record["temperature"],
+        "humidity":    record["humidity"],
+        "timestamp":   _serialize_ts(record["timestamp"]),
+        "age_seconds": int(umur),
+    })
 
 
 @app.route("/api/verifications/<verification_id>/correct", methods=["PATCH"])
