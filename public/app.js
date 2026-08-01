@@ -1303,9 +1303,8 @@ function exportPDF() {
   if (!w) { toast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.', 'err', { title: 'Tidak bisa membuka jendela cetak' }); return; }
 
   // Nama ruangan untuk judul laporan
-  const roomLabel = State.histDevice
-    ? (ROOM_CONFIG.find(r => r.id === State.histDevice)?.name || State.histDevice)
-    : 'Semua Ruangan';
+  const roomLabel = ROOM_CONFIG.find(r => r.id === State.histDevice)?.name
+    || State.histDevice || '—';
   const roomSlug = roomLabel.replace(/\s+/g, '-');
 
   const ts  = recs.map(r => r.temperature);
@@ -1631,35 +1630,40 @@ async function fetchRooms() {
   _populateKepatuhanRoomFilter();
 }
 
+/**
+ * Isi ulang sebuah dropdown ruangan TANPA opsi "Semua Ruangan".
+ *
+ * Opsi itu dihapus dengan alasan yang sama seperti di Dashboard dulu: grafik
+ * gabungan 6 ruangan tidak punya cara tampil yang bermakna — mau ditumpuk jadi
+ * 12 garis tak terbaca, atau dirata-rata jadi angka yang tidak menggambarkan
+ * ruangan mana pun. Setiap tampilan data kini SELALU spesifik 1 ruangan.
+ */
+function _isiDropdownRuangan(sel, withId = false) {
+  const prev = sel.value;
+  sel.innerHTML = ROOM_CONFIG.map(r =>
+    `<option value="${r.id}">${escHtml(r.name)}${withId ? ' (' + r.id + ')' : ''}</option>`
+  ).join('');
+  // Pertahankan pilihan pengguna; kalau belum ada (atau ruangannya sudah
+  // dihapus admin), jatuh ke ruangan pertama.
+  sel.value = (prev && ROOM_CONFIG.some(r => r.id === prev)) ? prev : (ROOM_CONFIG[0]?.id || '');
+  return sel.value || null;
+}
+
 function _populateHistoryFilter() {
   const sel = $('history-room-filter');
   if (!sel) return;
-  // Hapus opsi lama (kecuali "Semua Ruangan")
-  while (sel.options.length > 1) sel.remove(1);
-  ROOM_CONFIG.forEach(room => {
-    const opt = document.createElement('option');
-    opt.value = room.id;
-    opt.textContent = room.name + ' (' + room.id + ')';
-    sel.appendChild(opt);
-  });
+  State.histDevice = _isiDropdownRuangan(sel, true);
 }
 
 function _populateAnalysisFilter() {
   const sel = $('analysis-room-filter');
   if (!sel) return;
-  // Hapus opsi lama (kecuali "Semua Ruangan")
-  while (sel.options.length > 1) sel.remove(1);
-  ROOM_CONFIG.forEach(room => {
-    const opt = document.createElement('option');
-    opt.value = room.id;
-    opt.textContent = room.name;
-    sel.appendChild(opt);
-  });
+  State.analysisRoom = _isiDropdownRuangan(sel);
   // Pasang listener sekali
   if (!sel.dataset.listenerAttached) {
     sel.dataset.listenerAttached = '1';
     sel.addEventListener('change', () => {
-      State.analysisRoom = sel.value || null;
+      State.analysisRoom = sel.value;
       if (State.currentPage === 'analysis') updateAnalysisPage();
     });
   }
@@ -1672,16 +1676,10 @@ let _mlTempChart = null, _mlHumChart = null, _mlAnomalyChart = null, _mlKmeansCh
 function _populateMlRoomFilter() {
   const sel = $('ml-room-filter');
   if (!sel) return;
-  while (sel.options.length > 1) sel.remove(1);
-  ROOM_CONFIG.forEach(room => {
-    const opt = document.createElement('option');
-    opt.value = room.id;
-    opt.textContent = room.name;
-    sel.appendChild(opt);
-  });
+  State.mlRoom = _isiDropdownRuangan(sel);
   if (!sel.dataset.listenerAttached) {
     sel.dataset.listenerAttached = '1';
-    sel.addEventListener('change', () => { State.mlRoom = sel.value || null; });
+    sel.addEventListener('change', () => { State.mlRoom = sel.value; });
   }
   // Range seg buttons
   const seg = $('ml-range-seg');
