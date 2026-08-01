@@ -2972,120 +2972,406 @@ async function submitKepatuhanVerification() {
   }
 }
 
-function exportKepatuhanPDF() {
+// ══ PDF REPLIKA FORMULIR KERTAS RSND ═════════════════════════════════════════
+// Menggantikan grafik Chart.js pada PDF lama. RSND meminta laporan yang bentuknya
+// SAMA dengan formulir tulis tangan mereka: kertas berpetak dengan 3 kolom shift
+// per tanggal, titik dihubungkan garis tinta merah, blok merah penanda hari
+// Minggu, baris paraf petugas di bawah grafik, kotak keterangan 5 butir, dan
+// tabel analisis untuk diisi tangan.
+//
+// Digambar sebagai SVG murni, bukan Chart.js, karena bentuk ini bertentangan
+// dengan asumsi pustaka grafik: sumbu X harus SELALU menampilkan semua tanggal
+// (terisi maupun kosong), latarnya petak penuh, dan ada baris paraf di dalam
+// area grafik. Memaksakan Chart.js ke bentuk ini lebih rumit dan lebih rapuh
+// daripada menggambar sendiri.
+//
+// Satuan viewBox = milimeter. A4 lanskap margin 8 mm -> area cetak 281 x 194 mm.
+
+const _BULAN_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli',
+                   'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+/**
+ * Rentang sumbu Y. Keputusan RSND: sumbu mengikuti data (nilai 30 °C harus tetap
+ * tergambar), TAPI garis batas standar (15/25 atau 45/55) selalu dipaksa masuk —
+ * tanpa acuan itu pembaca kehilangan patokan mana yang normal.
+ * Kalau rentang melebar melewati 16 baris, langkah dinaikkan 2 -> 4 supaya petak
+ * tidak menjadi rapat tak terbaca.
+ */
+function _hitungSumbuY(values, forceLo, forceHi) {
+  let step = 2;
+  const dataLo = values.length ? Math.min(...values) : forceLo;
+  const dataHi = values.length ? Math.max(...values) : forceHi;
+  let lo = Math.floor(Math.min(forceLo, dataLo) / step) * step;
+  let hi = Math.ceil(Math.max(forceHi, dataHi) / step) * step;
+  if (lo === Math.min(forceLo, dataLo)) lo -= step;   // sisakan 1 baris ruang di tepi
+  if (hi === Math.max(forceHi, dataHi)) hi += step;
+  if ((hi - lo) / step > 16) {
+    step = 4;
+    lo = Math.floor(lo / step) * step;
+    hi = Math.ceil(hi / step) * step;
+  }
+  return { lo, hi, step };
+}
+
+/**
+ * Satu blok grafik formulir (suhu ATAU kelembapan) sebagai SVG utuh.
+ *
+ * o = {
+ *   judul       : 'GRAFIK MONITORING SUHU'
+ *   unit        : '°' | '%'
+ *   lo, hi, step: hasil _hitungSumbuY
+ *   tLo, tHi    : batas standar (garis merah putus-putus)
+ *   days        : jumlah hari bulan itu
+ *   sundays     : Set tanggal yang jatuh hari Minggu
+ *   points      : Map colIdx -> { v: nilai, ok: dalam batas? }
+ *   paraf       : Map colIdx -> dataURL tanda tangan TERPOTONG (siap cetak kecil)
+ * }
+ */
+function _bangunGrafikFormulir(o) {
+  const LABEL_W = 16, GRID_W = 265, W = LABEL_W + GRID_W;
+  const nCol = o.days * 3;
+  const colW = GRID_W / nCol;
+  const dateW = colW * 3;
+
+  const HDR_DATE = 5, HDR_SHIFT = 4, HDR = HDR_DATE + HDR_SHIFT;
+  const rows = Math.round((o.hi - o.lo) / o.step);
+  // Batas bawah 2.8 mm dipilih dari hitungan halaman: dengan dua grafik yang
+  // sama-sama ekstrem (16 baris), 3.2 mm membuat halaman luber 9 mm melewati
+  // area cetak A4; 2.8 mm menyisakan ruang 10 mm dan petaknya masih terbaca.
+  const rowH = Math.min(6, Math.max(2.8, 44 / rows));
+  const gridH = rows * rowH;
+  const PARAF_H = 8;
+  const H = HDR + gridH + PARAF_H + 1;
+
+  const X = (c) => LABEL_W + c * colW;          // tepi kiri kolom shift ke-c
+  const Y = (v) => HDR + ((o.hi - v) / (o.hi - o.lo)) * gridH;   // nilai -> posisi
+
+  const s = [];
+  s.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" ` +
+         `font-family="Arial, Helvetica, sans-serif">`);
+
+  // ── Blok merah hari Minggu ─────────────────────────────────────────────────
+  // Keputusan RSND: blok merah = penanda hari Minggu (bukan libur — data tetap
+  // dicatat). Karena murni kalender, blok digambar dari tanggal, bukan dari
+  // data, sehingga tetap muncul walau hari itu belum diisi.
+  for (const d of o.sundays) {
+    s.push(`<rect x="${X((d - 1) * 3).toFixed(2)}" y="0" width="${dateW.toFixed(2)}" ` +
+           `height="${(HDR + gridH + PARAF_H).toFixed(2)}" fill="#F5B8B8"/>`);
+  }
+
+  // ── Petak ──────────────────────────────────────────────────────────────────
+  for (let r = 0; r <= rows; r++) {
+    const y = (HDR + r * rowH).toFixed(2);
+    s.push(`<line x1="${LABEL_W}" y1="${y}" x2="${W}" y2="${y}" stroke="#8A8A8A" stroke-width="0.09"/>`);
+  }
+  for (let c = 0; c <= nCol; c++) {
+    const tebal = c % 3 === 0;   // batas antar tanggal lebih tegas
+    s.push(`<line x1="${X(c).toFixed(2)}" y1="0" x2="${X(c).toFixed(2)}" ` +
+           `y2="${(HDR + gridH + PARAF_H).toFixed(2)}" stroke="${tebal ? '#555' : '#B5B5B5'}" ` +
+           `stroke-width="${tebal ? 0.2 : 0.08}"/>`);
+  }
+
+  // Garis tepi header & baris paraf
+  for (const y of [0, HDR_DATE, HDR, HDR + gridH, HDR + gridH + PARAF_H]) {
+    s.push(`<line x1="${LABEL_W}" y1="${y.toFixed(2)}" x2="${W}" y2="${y.toFixed(2)}" stroke="#333" stroke-width="0.25"/>`);
+  }
+  s.push(`<line x1="${LABEL_W}" y1="0" x2="${LABEL_W}" y2="${(HDR + gridH + PARAF_H).toFixed(2)}" stroke="#333" stroke-width="0.25"/>`);
+
+  // ── Kepala kolom: tanggal + P/S/M ──────────────────────────────────────────
+  s.push(`<text x="${LABEL_W - 1.2}" y="3.4" font-size="2.3" text-anchor="end" font-weight="bold">Tgl</text>`);
+  s.push(`<text x="${LABEL_W - 1.2}" y="${HDR - 1.2}" font-size="2" text-anchor="end">Shift</text>`);
+  const SH = ['P', 'S', 'M'];
+  for (let d = 1; d <= o.days; d++) {
+    s.push(`<text x="${(X((d - 1) * 3) + dateW / 2).toFixed(2)}" y="3.6" font-size="2.4" ` +
+           `text-anchor="middle" font-weight="bold">${d}</text>`);
+    for (let k = 0; k < 3; k++) {
+      s.push(`<text x="${(X((d - 1) * 3 + k) + colW / 2).toFixed(2)}" y="${HDR - 1.1}" ` +
+             `font-size="1.6" text-anchor="middle" fill="#444">${SH[k]}</text>`);
+    }
+  }
+
+  // ── Label sumbu Y + garis batas standar ────────────────────────────────────
+  for (let v = o.lo; v <= o.hi; v += o.step) {
+    const ambang = (v === o.tLo || v === o.tHi);
+    s.push(`<text x="${LABEL_W - 1.2}" y="${(Y(v) + 0.85).toFixed(2)}" font-size="2.3" ` +
+           `text-anchor="end"${ambang ? ' font-weight="bold" fill="#B91C1C"' : ''}>${v}${o.unit}</text>`);
+  }
+  // Batas standar digambar putus-putus merah. Formulir kertas tidak memerlukannya
+  // karena sumbunya PAS di batas; sumbu kita mengikuti data (keputusan RSND),
+  // jadi batasnya harus ditandai eksplisit agar tetap terbaca.
+  for (const v of [o.tLo, o.tHi]) {
+    if (v >= o.lo && v <= o.hi) {
+      s.push(`<line x1="${LABEL_W}" y1="${Y(v).toFixed(2)}" x2="${W}" y2="${Y(v).toFixed(2)}" ` +
+             `stroke="#B91C1C" stroke-width="0.22" stroke-dasharray="1.4 0.9"/>`);
+    }
+  }
+
+  // ── Garis merah + titik ────────────────────────────────────────────────────
+  // Meniru keterangan formulir butir 3: "tarik garis dari hari sebelumnya hingga
+  // membuat satu garis (menggunakan tinta merah)".
+  const cols = [...o.points.keys()].sort((a, b) => a - b);
+  if (cols.length > 1) {
+    const pts = cols.map(c => `${(X(c) + colW / 2).toFixed(2)},${Y(o.points.get(c).v).toFixed(2)}`).join(' ');
+    s.push(`<polyline points="${pts}" fill="none" stroke="#CC1111" stroke-width="0.4" ` +
+           `stroke-linejoin="round" stroke-linecap="round"/>`);
+  }
+  for (const c of cols) {
+    const p = o.points.get(c);
+    s.push(`<circle cx="${(X(c) + colW / 2).toFixed(2)}" cy="${Y(p.v).toFixed(2)}" r="0.75" ` +
+           `fill="${p.ok ? '#111' : '#CC1111'}"/>`);
+  }
+
+  // ── Baris paraf ────────────────────────────────────────────────────────────
+  // Keputusan RSND: tanda tangan diperkecil sampai seukuran paraf tulis tangan.
+  // Hasilnya memang coretan kecil yang tidak terbaca satu per satu — sama seperti
+  // formulir asli; fungsinya penanda kehadiran, bukan untuk dibaca. Versi ukuran
+  // normal tetap ada di daftar paraf bawah halaman.
+  s.push(`<text x="${LABEL_W - 1.2}" y="${(HDR + gridH + 3.4).toFixed(2)}" font-size="1.8" ` +
+         `text-anchor="end">Nama</text>`);
+  s.push(`<text x="${LABEL_W - 1.2}" y="${(HDR + gridH + 6).toFixed(2)}" font-size="1.8" ` +
+         `text-anchor="end">Paraf</text>`);
+  const py = HDR + gridH + 0.6, ph = PARAF_H - 1.2;
+  for (const [c, url] of o.paraf) {
+    // Lebar dibiarkan sampai 3 kolom (selebar 1 tanggal) — paraf asli di kertas
+    // juga meluber melewati kolomnya sendiri; preserveAspectRatio menjaga bentuk.
+    const pw = dateW;
+    const px = X(c) + colW / 2 - pw / 2;
+    s.push(`<image x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${pw.toFixed(2)}" ` +
+           `height="${ph.toFixed(2)}" preserveAspectRatio="xMidYMid meet" href="${url}"/>`);
+  }
+
+  s.push('</svg>');
+  return s.join('\n');
+}
+
+/** Potong kanvas tanda tangan ke area yang benar-benar bertinta.
+ *  Kebanyakan orang menandatangani hanya di sebagian kanvas 420x150; tanpa
+ *  pemotongan, rasio kosong itu ikut diperkecil dan parafnya jadi tak terlihat. */
+function _cropTandaTangan(dataURL) {
+  return new Promise((resolve) => {
+    if (!dataURL) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, c.width, c.height).data;
+        let minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+        for (let y = 0; y < c.height; y++) {
+          for (let x = 0; x < c.width; x++) {
+            if (data[(y * c.width + x) * 4 + 3] > 20) {   // piksel bertinta
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+        if (maxX < 0) { resolve(dataURL); return; }   // kanvas kosong — pakai apa adanya
+        const pad = 6;
+        minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+        maxX = Math.min(c.width - 1, maxX + pad); maxY = Math.min(c.height - 1, maxY + pad);
+        const w = maxX - minX + 1, h = maxY - minY + 1;
+        const c2 = document.createElement('canvas');
+        c2.width = w; c2.height = h;
+        c2.getContext('2d').drawImage(c, minX, minY, w, h, 0, 0, w, h);
+        resolve(c2.toDataURL('image/png'));
+      } catch (e) { resolve(dataURL); }
+    };
+    img.onerror = () => resolve(dataURL);
+    img.src = dataURL;
+  });
+}
+
+async function exportKepatuhanPDF() {
   if (!_kepatuhanEntries.length) {
     showModal({
       title: 'Belum ada data untuk diekspor',
-      sub: 'Laporan PDF dibuat dari entri verifikasi shift, bukan dari data sensor otomatis.',
+      sub: 'Laporan dibuat dari entri verifikasi shift, bukan dari data sensor otomatis.',
       bodyHtml:
         '<ol style="margin:0;padding-left:20px;font-size:13.5px;line-height:1.75;color:var(--ink-2);">' +
           '<li><strong>Admin → Setting</strong> — tambahkan minimal 1 nama verifikator.</li>' +
-          '<li>Kembali ke halaman ini, isi form verifikasi: shift, suhu, kelembapan, nama, tanda tangan.</li>' +
+          '<li>Isi form verifikasi: shift, suhu, kelembapan, nama, tanda tangan.</li>' +
           '<li>Klik <strong>Simpan Verifikasi</strong>. Ulangi tiap shift — Pagi, Siang, Malam.</li>' +
-        '</ol>' +
-        '<p style="margin:14px 0 0;font-size:12.5px;color:var(--muted);line-height:1.6;">' +
-          'Kalau tabel di bawah menampilkan pesan merah, itu kegagalan server — bukan data kosong. Baca pesannya.' +
-        '</p>',
-      okText: 'Mengerti',
-      hideCancel: true,
+        '</ol>',
+      okText: 'Mengerti', hideCancel: true,
     });
     return;
   }
+
   const room     = ROOM_CONFIG.find(r => r.id === $('kepatuhan-room')?.value);
   const roomName = room ? room.name : ($('kepatuhan-room')?.value || '—');
   const monthVal = $('kepatuhan-month')?.value || '';
-  const tempImg  = kepatuhanChartTemp ? kepatuhanChartTemp.toBase64Image() : '';
-  const humImg   = kepatuhanChartHum  ? kepatuhanChartHum.toBase64Image()  : '';
+  const [year, month] = monthVal.split('-').map(Number);
+  const days = new Date(year, month, 0).getDate();
 
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) { toast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.', 'err', { title: 'Tidak bisa membuka jendela cetak' }); return; }
+  // Hari Minggu bulan itu — dihitung dari kalender, bukan dari data.
+  const sundays = new Set();
+  for (let d = 1; d <= days; d++) {
+    if (new Date(year, month - 1, d).getDay() === 0) sundays.add(d);
+  }
 
-  let adaRalat = false, adaManual = false;
-  const rows = _kepatuhanEntries.map((e, i) => {
+  // Petakan entri ke kolom (tanggal-1)*3 + shift, dan potong semua tanda tangan.
+  const SIDX = { Pagi: 0, Siang: 1, Malam: 2 };
+  const tPts = new Map(), hPts = new Map(), paraf = new Map();
+  const tVals = [], hVals = [];
+  const perluCrop = [];
+
+  for (const e of _kepatuhanEntries) {
     const d = new Date(e.submitted_at);
-    const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-    const bg = i % 2 === 0 ? '#fff' : '#f9f9f7';
-    // Warna per kolom, bukan per baris — supaya di dokumen cetak pun terlihat
-    // jelas parameter MANA yang menyimpang.
+    if (d.getFullYear() !== year || d.getMonth() + 1 !== month) continue;
+    const col = (d.getDate() - 1) * 3 + (SIDX[e.shift] ?? 0);
     const st = _entryStatus(e);
-    const tColor = st.tempOk ? '#059669' : '#DC2626';
-    const hColor = st.humOk  ? '#059669' : '#DC2626';
-    const sigImg = e.signature ? `<img src="${e.signature}" style="height:22px;">` : '—';
+    if (typeof e.temperature === 'number') { tPts.set(col, { v: e.temperature, ok: st.tempOk }); tVals.push(e.temperature); }
+    if (typeof e.humidity === 'number')    { hPts.set(col, { v: e.humidity,    ok: st.humOk  }); hVals.push(e.humidity); }
+    if (e.signature) perluCrop.push([col, e.signature]);
+  }
 
-    // Entri yang diralat dicetak dengan nilai lama dicoret, sama seperti koreksi
-    // pada formulir kertas — auditor harus bisa melihat jejaknya di dokumen cetak,
-    // bukan hanya di layar.
-    if (e.corrected) adaRalat = true;
-    if (e.sumber_nilai === 'manual') adaManual = true;
-    const nilai = (baru, asli, unit) => {
-      const s = baru != null ? baru.toFixed(1) + unit : '—';
-      if (!e.corrected || asli == null || asli === baru) return s;
-      return `<s style="color:#999;font-weight:400;">${asli.toFixed(1)}${unit}</s> ${s}`;
-    };
-    const tandaRalat = e.corrected ? ' <sup style="color:#B45309;font-weight:700;">R</sup>' : '';
-    // Penanda M = angka diisi manual, bukan dari sensor. Wajib tampil di dokumen
-    // cetak supaya auditor tahu asal setiap angka.
-    const tandaManual = (e.sumber_nilai === 'manual') ? ' <sup style="color:#555;font-weight:700;">M</sup>' : '';
-    const catatanCetak = e.corrected
-      ? `${(e.catatan || '').slice(0, 40)} <em style="color:#B45309;">[Ralat: ${(e.correction_reason || '').slice(0, 40)}]</em>`
-      : (e.catatan || '').slice(0, 60);
+  toast('Menyiapkan laporan…', 'info', { duration: 2500 });
+  for (const [col, sig] of perluCrop) paraf.set(col, await _cropTandaTangan(sig));
 
-    return `<tr style="background:${bg}">
-      <td style="padding:6px 10px;">${dateStr}</td><td style="padding:6px 10px;">${e.shift}${tandaRalat}${tandaManual}</td>
-      <td style="padding:6px 10px;text-align:right;color:${tColor};font-weight:700;">${nilai(e.temperature, e.original_temperature, '°C')}</td>
-      <td style="padding:6px 10px;text-align:right;color:${hColor};font-weight:700;">${nilai(e.humidity, e.original_humidity, '%')}</td>
-      <td style="padding:6px 10px;">${e.verifikator_name || '—'}</td>
-      <td style="padding:6px 10px;">${sigImg}</td>
-      <td style="padding:6px 10px;font-size:11px;">${catatanCetak}</td>
-    </tr>`;
-  }).join('');
+  const limits = room || { tempMin: 15, tempMax: 25, humMin: 45, humMax: 55 };
+  const tAxis = _hitungSumbuY(tVals, limits.tempMin, limits.tempMax);
+  const hAxis = _hitungSumbuY(hVals, limits.humMin,  limits.humMax);
 
-  const ketRalat = adaRalat
-    ? '<p style="margin-top:10px;font-size:10.5px;color:#666;"><sup style="color:#B45309;font-weight:700;">R</sup> ' +
-      'Entri diralat. Nilai yang dicoret adalah angka yang tercatat semula; nilai di sebelahnya adalah hasil koreksi. ' +
-      'Nilai asli sengaja tidak dihapus agar koreksi dapat ditelusuri.</p>'
-    : '';
+  const svgSuhu = _bangunGrafikFormulir({
+    judul: 'GRAFIK MONITORING SUHU', unit: '°',
+    lo: tAxis.lo, hi: tAxis.hi, step: tAxis.step,
+    tLo: limits.tempMin, tHi: limits.tempMax,
+    days, sundays, points: tPts, paraf,
+  });
+  const svgHum = _bangunGrafikFormulir({
+    judul: 'GRAFIK MONITORING KELEMBABAN', unit: '%',
+    lo: hAxis.lo, hi: hAxis.hi, step: hAxis.step,
+    tLo: limits.humMin, tHi: limits.humMax,
+    days, sundays, points: hPts, paraf,
+  });
 
-  const ketManual = adaManual
-    ? '<p style="margin-top:6px;font-size:10.5px;color:#666;"><sup style="color:#555;font-weight:700;">M</sup> ' +
-      'Suhu dan kelembapan pada entri ini diisi manual oleh petugas dari alat ukur, bukan diambil otomatis dari sensor ruangan. ' +
-      'Umumnya karena sensor sedang tidak mengirim data saat pencatatan dilakukan.</p>'
-    : '';
+  // Daftar paraf ukuran normal — paraf mini di grid tidak terbaca satu per satu
+  // (memang seperti kertas asli); daftar ini yang membuatnya tetap bisa diperiksa.
+  const verifikatorUnik = new Map();
+  for (const e of _kepatuhanEntries) {
+    if (e.verifikator_name && e.signature && !verifikatorUnik.has(e.verifikator_name)) {
+      verifikatorUnik.set(e.verifikator_name, e.signature);
+    }
+  }
+  const daftarParaf = [...verifikatorUnik].map(([nama, sig]) =>
+    `<div style="display:flex;align-items:center;gap:2mm;">
+       <img src="${sig}" style="height:9mm;border-bottom:0.3mm solid #999;">
+       <span style="font-size:2.6mm;">${escHtml(nama)}</span>
+     </div>`).join('');
+
+  // Tabel analisis: entri menyimpang / yang punya catatan, + baris kosong tulis tangan.
+  const barisAnalisis = _kepatuhanEntries
+    .filter(e => { const st = _entryStatus(e); return !(st.tempOk && st.humOk) || e.catatan || e.tindakan; })
+    .map(e => {
+      const d = new Date(e.submitted_at);
+      const st = _entryStatus(e);
+      return `<tr>
+        <td>${d.getDate()}/${month} ${escHtml(e.shift)}</td>
+        <td><span style="color:${st.tempOk ? '#111' : '#CC1111'};">${e.temperature != null ? e.temperature.toFixed(1) : '—'}°C</span> /
+            <span style="color:${st.humOk ? '#111' : '#CC1111'};">${e.humidity != null ? e.humidity.toFixed(1) : '—'}%</span>
+            ${e.sumber_nilai === 'manual' ? '<sup>M</sup>' : ''}${e.corrected ? '<sup style="color:#B45309;">R</sup>' : ''}</td>
+        <td>${escHtml(e.catatan || '')}</td>
+        <td>${escHtml(e.tindakan || '')}</td>
+        <td>${escHtml(e.verifikator_name || '')}</td>
+      </tr>`;
+    }).join('');
+  const barisKosong = '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>'.repeat(5);
+
+  const w = window.open('', '_blank', 'width=1200,height=800');
+  if (!w) { toast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.', 'err'); return; }
 
   w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8">
-<title>Kepatuhan — ${roomName} — ${monthVal}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Helvetica Neue',Arial,sans-serif;color:#111;padding:32px}
-.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:2.5px solid #111}
-h1{font-size:20px;font-weight:800;}.meta{font-size:12px;color:#666;margin-top:5px}
-img.chart{width:100%;max-width:800px;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:18px;display:block;}
-table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:8px;}thead tr{background:#f3f3f1}
-th{padding:7px 10px;text-align:left;font-size:9.5px;font-weight:700;text-transform:uppercase;color:#555;border-bottom:1px solid #ddd}
-td{border-bottom:1px solid #f0f0ee;}
-@media print{.np{display:none}}</style></head><body>
-<div class="hdr"><div><h1>Laporan Kepatuhan Suhu &amp; Kelembaban</h1>
-<div class="meta">${roomName} &nbsp;·&nbsp; Bulan: ${monthVal} &nbsp;·&nbsp; Dibuat: ${new Date().toLocaleString('id-ID',{hour12:false})}</div>
-<div class="meta">Sesuai Permenkes RI No. 72 Tahun 2016 — verifikasi 3x/hari (Pagi/Siang/Malam)</div></div>
-<button class="np" onclick="window.print()" style="padding:8px 18px;background:#111;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Print / Save PDF</button></div>
-${tempImg ? `<div><strong style="font-size:13px;">Grafik Suhu</strong><br><img class="chart" src="${tempImg}"></div>` : ''}
-${humImg ? `<div><strong style="font-size:13px;">Grafik Kelembaban</strong><br><img class="chart" src="${humImg}"></div>` : ''}
-<table><thead><tr><th>Tanggal</th><th>Shift</th><th>Suhu</th><th>Hum</th><th>Verifikator</th><th>TTD</th><th>Catatan</th></tr></thead>
-<tbody>${rows}</tbody></table>
-${ketRalat}
-${ketManual}
-<div style="margin-top:42px;display:flex;justify-content:space-between;gap:40px;page-break-inside:avoid;">
-  <div style="flex:1;text-align:center;">
-    <div style="font-size:11.5px;color:#555;">Semarang, ${new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})}</div>
-    <div style="font-size:11.5px;color:#555;margin-top:2px;">Petugas Pencatat</div>
-    <div style="height:58px;"></div>
-    <div style="border-top:1px solid #111;padding-top:5px;font-size:11.5px;">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>
+<title>Monitoring ${escHtml(roomName)} — ${_BULAN_ID[month - 1]} ${year}</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; }
+  .pg { width: 281mm; page-break-after: always; }
+  .pg:last-child { page-break-after: auto; }
+  svg { display: block; width: 281mm; height: auto; }
+  .kop { display: flex; align-items: center; justify-content: space-between;
+         border-bottom: 0.6mm solid #111; padding-bottom: 1.5mm; margin-bottom: 2mm; }
+  .kop .logo { font-size: 5mm; font-weight: bold; color: #0B7A43; }
+  .kop .judul { text-align: center; }
+  .kop .judul h1 { font-size: 4.2mm; }
+  .kop .judul p { font-size: 2.8mm; color: #333; }
+  .kop .bulan { font-size: 3mm; text-align: right; line-height: 1.6; }
+  .lbl { font-size: 3mm; font-weight: bold; margin: 1.5mm 0 0.5mm; }
+  .bawah { display: flex; gap: 4mm; margin-top: 2mm; }
+  .ket { flex: 1.4; border: 0.3mm solid #333; padding: 2mm; font-size: 2.5mm; line-height: 1.55; }
+  .ket ol { padding-left: 4mm; }
+  .parafbox { flex: 1; border: 0.3mm solid #333; padding: 2mm; }
+  .parafbox .isi { display: flex; flex-wrap: wrap; gap: 2mm 5mm; margin-top: 1mm; }
+  h2 { font-size: 4mm; margin-bottom: 2mm; }
+  table.analisis { width: 100%; border-collapse: collapse; font-size: 3mm; }
+  table.analisis th, table.analisis td { border: 0.25mm solid #333; padding: 1.6mm 2mm; text-align: left; vertical-align: top; }
+  table.analisis th { background: #EFEFEF; font-size: 2.7mm; text-transform: uppercase; }
+  table.analisis td { height: 9mm; }
+  .ttd { display: flex; justify-content: flex-end; gap: 30mm; margin-top: 8mm; text-align: center; font-size: 3mm; }
+  .ttd .garis { margin-top: 18mm; border-top: 0.3mm solid #111; padding-top: 1mm; }
+  .np { position: fixed; top: 4mm; right: 4mm; padding: 2.5mm 5mm; background: #111; color: #fff;
+        border: none; border-radius: 2mm; font-size: 3.2mm; cursor: pointer; }
+  @media print { .np { display: none; } }
+</style></head><body>
+
+<button class="np" onclick="window.print()">⬇ Print / Save PDF</button>
+
+<div class="pg">
+  <div class="kop">
+    <div class="logo">✚ RSND</div>
+    <div class="judul">
+      <h1>GRAFIK MONITORING SUHU DAN KELEMBABAN RUANGAN</h1>
+      <p>${escHtml(roomName)} · Permenkes RI No. 72 Tahun 2016 (suhu ${limits.tempMin}–${limits.tempMax} °C, kelembaban ${limits.humMin}–${limits.humMax}%)</p>
+    </div>
+    <div class="bulan">BULAN : <strong>${_BULAN_ID[month - 1].toUpperCase()}</strong><br>TAHUN : <strong>${year}</strong></div>
   </div>
-  <div style="flex:1;text-align:center;">
-    <div style="font-size:11.5px;color:#555;">Mengetahui,</div>
-    <div style="font-size:11.5px;color:#555;margin-top:2px;">Kepala Ruangan</div>
-    <div style="height:58px;"></div>
-    <div style="border-top:1px solid #111;padding-top:5px;font-size:11.5px;">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>
+
+  <div class="lbl">GRAFIK MONITORING SUHU</div>
+  ${svgSuhu}
+  <div class="lbl">GRAFIK MONITORING KELEMBABAN</div>
+  ${svgHum}
+
+  <div class="bawah">
+    <div class="ket">
+      <strong>KETERANGAN :</strong>
+      <ol>
+        <li>Ketentuan : batas normal suhu penyimpanan ${limits.tempMin}–${limits.tempMax} °C, kelembaban udara ${limits.humMin}–${limits.humMax}% (Permenkes RI No. 72 Tahun 2016)</li>
+        <li>Titik dibubuhkan pada kolom suhu dan kelembaban pada tanggal yang sesuai setiap shift Pagi, Siang, Malam</li>
+        <li>Garis ditarik dari hari sebelumnya hingga membentuk satu garis (tinta merah)</li>
+        <li>Nama dan paraf petugas tercantum pada kolom petugas; kolom bertanda merah adalah hari Minggu (data tetap dicatat)</li>
+        <li>Jika suhu berada di luar batas normal, petugas segera menghubungi IPSRS</li>
+      </ol>
+      <p style="margin-top:1mm;color:#555;">Titik merah = di luar batas · <sup>M</sup> = diisi manual · <sup>R</sup> = entri diralat (nilai asli tersimpan)</p>
+    </div>
+    <div class="parafbox">
+      <strong style="font-size:2.7mm;">NAMA &amp; PARAF PETUGAS BULAN INI</strong>
+      <div class="isi">${daftarParaf || '<span style="font-size:2.6mm;color:#777;">—</span>'}</div>
+    </div>
   </div>
 </div>
+
+<div class="pg">
+  <h2>ANALISIS &amp; TINDAK LANJUT — ${escHtml(roomName)}, ${_BULAN_ID[month - 1]} ${year}</h2>
+  <table class="analisis">
+    <thead><tr>
+      <th style="width:14%;">Tgl / Shift</th>
+      <th style="width:16%;">Suhu / Kelembaban</th>
+      <th style="width:28%;">Analisis</th>
+      <th style="width:28%;">Tindakan dan Hasil</th>
+      <th style="width:14%;">Petugas yg Melaporkan</th>
+    </tr></thead>
+    <tbody>${barisAnalisis}${barisKosong}</tbody>
+  </table>
+  <div class="ttd">
+    <div>Petugas<div class="garis">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div></div>
+    <div>Mengetahui,<br>Kepala Ruangan<div class="garis">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div></div>
+  </div>
+</div>
+
 </body></html>`);
   w.document.close();
 }
