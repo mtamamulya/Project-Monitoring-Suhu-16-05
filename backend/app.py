@@ -195,15 +195,30 @@ def telemetry():
     humidity    = body.get("humidity")
     device_id   = body.get("device_id", "esp32-default")
 
+    # Batas kewajaran fisik ruangan rumah sakit. Ini JARING TERAKHIR — penyaringan
+    # utama ada di firmware (masa pemanasan, median 5 sampel, guard lonjakan).
+    #
+    # Batas lama -50..100 °C terlalu longgar untuk tujuannya: nilai sampah khas
+    # DHT22 saat baru menyala, misalnya 1,2 °C, tetap lolos dan masuk database —
+    # lalu ikut tercetak di laporan akreditasi dan memicu alarm palsu.
+    # Diperketat supaya unit yang firmware-nya belum diperbarui pun tetap tersaring.
+    # Batasnya SAMA PERSIS dengan PHYS_* di firmware. Percobaan pertama memakai
+    # 0-60 °C dengan maksud "sedikit lebih longgar sebagai jaring", tapi itu justru
+    # meloloskan 1,2 °C — nilai sampah yang persis mau dicegah. Jaring yang
+    # bolong tepat di lubang yang mau ditambal tidak ada gunanya.
     if temperature is None:
         errors.append("Missing field: temperature")
-    elif not isinstance(temperature, (int, float)) or not (-50 <= float(temperature) <= 100):
-        errors.append("temperature harus angka antara -50 dan 100")
+    elif not isinstance(temperature, (int, float)) or not (5 <= float(temperature) <= 50):
+        errors.append("temperature di luar batas kewajaran ruangan (5-50 °C)")
     if humidity is None:
         errors.append("Missing field: humidity")
-    elif not isinstance(humidity, (int, float)) or not (0 <= float(humidity) <= 100):
-        errors.append("humidity harus angka antara 0 dan 100")
+    elif not isinstance(humidity, (int, float)) or not (10 <= float(humidity) <= 99):
+        errors.append("humidity di luar batas kewajaran ruangan (10-99%)")
     if errors:
+        # Dicatat, bukan ditolak diam-diam. Perangkat yang sering ditolak berarti
+        # sensornya mulai rusak — itu informasi yang dibutuhkan teknisi.
+        logger.warning("Telemetri ditolak dari %s: %s (temperature=%r humidity=%r)",
+                       body.get("device_id", "?"), "; ".join(errors), temperature, humidity)
         return jsonify({"error": "Validation failed", "details": errors}), 400
 
     temperature = round(float(temperature), 2)

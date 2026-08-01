@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1420" height="1080" viewBox="0 0 1420 1080">
+<defs>
+  <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5"
+          markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748B"/>
+  </marker>
+</defs>
+<rect width="1420" height="1080" fill="#FFFFFF"/>
+<text x="710.0" y="48" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="27" font-weight="800" fill="#0F172A" text-anchor="middle">SKEMA ALAT DAN HASIL</text>
+<text x="710.0" y="76" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="15" font-weight="600" fill="#1D4ED8" text-anchor="middle">Sistem Monitoring Suhu &amp; Kelembapan Ruangan — RSND</text>
+<rect x="380.0" y="92" width="660" height="34" rx="17" fill="#EFF6FF" stroke="#1D4ED8" stroke-width="1.4"/>
+<text x="710.0" y="114" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13.5" font-weight="700" fill="#1D4ED8" text-anchor="middle">Standar acuan: suhu 15–25 °C  ·  kelembapan 45–55%  ·  Permenkes RI No. 72 Tahun 2016</text>
+<rect x="38" y="146" width="596" height="176" rx="12" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.6"/>
+<rect x="38" y="146" width="596" height="38" rx="12" fill="#DC2626"/>
+<rect x="38" y="172" width="596" height="12" fill="#DC2626"/>
+<text x="336.0" y="171" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="15.5" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.6">MASALAH SAAT INI</text>
+<text x="54" y="211.2" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Pencatatan suhu dan kelembapan ruangan masih ditulis tangan di formulir, tiga kali</text>
+<text x="54" y="229.4" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">sehari. Saat petugas sibuk, jam pencatatan mudah terlewat. Penyimpangan baru</text>
+<text x="54" y="247.5" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">diketahui ketika petugas datang mengecek, dan berkas kertasnya sulit ditelusuri</text>
+<text x="54" y="265.6" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">saat akreditasi.</text>
+<rect x="786" y="146" width="596" height="176" rx="12" fill="#FFFBEB" stroke="#B45309" stroke-width="1.6"/>
+<rect x="786" y="146" width="596" height="38" rx="12" fill="#B45309"/>
+<rect x="786" y="172" width="596" height="12" fill="#B45309"/>
+<text x="1084.0" y="171" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="15.5" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.6">TUJUAN</text>
+<text x="802" y="211.2" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Membangun sistem yang memantau suhu dan kelembapan enam ruangan secara otomatis</text>
+<text x="802" y="229.4" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">selama 24 jam, memberi peringatan segera begitu keluar dari batas standar, dan</text>
+<text x="802" y="247.5" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">menghasilkan laporan bulanan yang siap dilampirkan untuk akreditasi.</text>
+<line x1="646" y1="234.0" x2="774" y2="234.0" stroke="#94A3B8" stroke-width="3.2" marker-end="url(#ar)" stroke-linecap="round"/>
+<rect x="38" y="364" width="372" height="300" rx="12" fill="#F0FDF4" stroke="#15803D" stroke-width="1.6"/>
+<rect x="38" y="364" width="372" height="38" rx="12" fill="#15803D"/>
+<rect x="38" y="390" width="372" height="12" fill="#15803D"/>
+<text x="224.0" y="389" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="15.5" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.6">PERANGKAT DI TIAP RUANGAN</text>
+<circle cx="58" cy="425.2" r="2.8" fill="#15803D"/>
+<text x="70" y="429.2" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Sensor DHT22 — mengukur suhu dan kelembapan</text>
+<text x="70" y="447.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">udara</text>
+<circle cx="58" cy="465.8" r="2.8" fill="#15803D"/>
+<text x="70" y="469.8" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Mikrokontroler ESP32 — otak alat, sekaligus</text>
+<text x="70" y="487.5" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">penghubung ke WiFi</text>
+<circle cx="58" cy="506.2" r="2.8" fill="#15803D"/>
+<text x="70" y="510.2" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Layar LCD — angka terbaca langsung di ruangan,</text>
+<text x="70" y="528.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">walau internet mati</text>
+<circle cx="58" cy="546.8" r="2.8" fill="#15803D"/>
+<text x="70" y="550.8" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Baterai 18650 — alat tetap hidup saat listrik</text>
+<text x="70" y="568.5" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">padam</text>
+<text x="224.0" y="648" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" font-weight="700" fill="#15803D" text-anchor="middle">1 unit per ruangan · total 6 unit</text>
+<rect x="440" y="364" width="566" height="300" rx="14" fill="#1D4ED8" stroke="#1E3A8A" stroke-width="2"/>
+<text x="723.0" y="406" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="19" font-weight="800" fill="#FFFFFF" text-anchor="middle">SISTEM MONITORING</text>
+<text x="723.0" y="428" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#BFDBFE" text-anchor="middle">Server · database · dashboard</text>
+<rect x="456" y="450" width="534" height="46" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1"/>
+<text x="470" y="469" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13.5" font-weight="700" fill="#1E3A8A">Dashboard web &amp; HP</text>
+<text x="470" y="487" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#475569">Kondisi 6 ruangan terlihat sekaligus, bisa dibuka dari mana saja</text>
+<rect x="456" y="502" width="534" height="46" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1"/>
+<text x="470" y="521" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13.5" font-weight="700" fill="#1E3A8A">Alarm bertingkat</text>
+<text x="470" y="539" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#475569">Peringatan ke Discord teknisi, kritis ke Telegram perawat</text>
+<rect x="456" y="554" width="534" height="46" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1"/>
+<text x="470" y="573" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13.5" font-weight="700" fill="#1E3A8A">Verifikasi 3× sehari</text>
+<text x="470" y="591" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#475569">Petugas mengisi dan menandatangani langsung di layar</text>
+<rect x="456" y="606" width="534" height="46" rx="8" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1"/>
+<text x="470" y="625" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13.5" font-weight="700" fill="#1E3A8A">Laporan bulanan PDF</text>
+<text x="470" y="643" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#475569">Grafik per shift, tabel angka, dan tanda tangan</text>
+<rect x="1036" y="364" width="372" height="300" rx="12" fill="#FFFBEB" stroke="#B45309" stroke-width="1.6"/>
+<rect x="1036" y="364" width="372" height="38" rx="12" fill="#B45309"/>
+<rect x="1036" y="390" width="372" height="12" fill="#B45309"/>
+<text x="1222.0" y="389" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="15.5" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.6">DATA &amp; LAPORAN</text>
+<circle cx="1056" cy="425.2" r="2.8" fill="#B45309"/>
+<text x="1068" y="429.2" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Riwayat suhu dan kelembapan tersimpan otomatis,</text>
+<text x="1068" y="447.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">tanpa perlu diketik</text>
+<circle cx="1056" cy="465.8" r="2.8" fill="#B45309"/>
+<text x="1068" y="469.8" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Grafik harian, bulanan, dan per shift</text>
+<text x="1068" y="487.5" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">pagi/siang/malam</text>
+<circle cx="1056" cy="506.2" r="2.8" fill="#B45309"/>
+<text x="1068" y="510.2" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Angka terendah, tertinggi, dan rata-rata per</text>
+<text x="1068" y="528.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">hari</text>
+<circle cx="1056" cy="546.8" r="2.8" fill="#B45309"/>
+<text x="1068" y="550.8" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12.5" fill="#334155">Laporan PDF siap dilampirkan untuk akreditasi</text>
+<line x1="416" y1="514.0" x2="434" y2="514.0" stroke="#94A3B8" stroke-width="3.2" marker-end="url(#ar)" stroke-linecap="round"/>
+<line x1="1012" y1="514.0" x2="1030" y2="514.0" stroke="#94A3B8" stroke-width="3.2" marker-end="url(#ar)" stroke-linecap="round"/>
+<rect x="38" y="698" width="1344" height="74" rx="12" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.4"/>
+<text x="710.0" y="722" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13" font-weight="800" fill="#334155" text-anchor="middle" letter-spacing="0.8">ENAM RUANGAN YANG DIPANTAU</text>
+<rect x="58.0" y="734" width="210.66666666666666" height="28" rx="7" fill="#FFFFFF" stroke="#1D4ED8" stroke-width="1.2"/>
+<text x="163.33333333333331" y="753" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">Ruang Bersalin 1</text>
+<rect x="276.66666666666663" y="734" width="210.66666666666666" height="28" rx="7" fill="#FFFFFF" stroke="#1D4ED8" stroke-width="1.2"/>
+<text x="381.99999999999994" y="753" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">Ruang Bersalin 2</text>
+<rect x="495.3333333333333" y="734" width="210.66666666666666" height="28" rx="7" fill="#FFFFFF" stroke="#1D4ED8" stroke-width="1.2"/>
+<text x="600.6666666666666" y="753" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">Ruang Obat</text>
+<rect x="714.0" y="734" width="210.66666666666666" height="28" rx="7" fill="#FFFFFF" stroke="#1D4ED8" stroke-width="1.2"/>
+<text x="819.3333333333334" y="753" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">Ruang Perinatologi</text>
+<rect x="932.6666666666666" y="734" width="210.66666666666666" height="28" rx="7" fill="#FFFFFF" stroke="#1D4ED8" stroke-width="1.2"/>
+<text x="1038.0" y="753" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">Ruang Rawat Inap 1</text>
+<rect x="1151.3333333333333" y="734" width="210.66666666666666" height="28" rx="7" fill="#FFFFFF" stroke="#1D4ED8" stroke-width="1.2"/>
+<text x="1256.6666666666665" y="753" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="12" font-weight="600" fill="#1D4ED8" text-anchor="middle">Nurse Station</text>
+<rect x="38" y="806" width="1344" height="168" rx="12" fill="#ECFDF5" stroke="#15803D" stroke-width="1.8"/>
+<rect x="38" y="806" width="1344" height="38" rx="12" fill="#15803D"/>
+<rect x="38" y="832" width="1344" height="12" fill="#15803D"/>
+<text x="710.0" y="831" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="15.5" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.6">HASIL &amp; MANFAAT</text>
+<text x="62.0" y="874" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13" font-weight="700" fill="#15803D">Penyimpangan cepat diketahui</text>
+<text x="62.0" y="895.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">Suhu di luar batas terdeteksi dalam hitungan</text>
+<text x="62.0" y="911.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">menit, tidak menunggu jam pengecekan</text>
+<text x="62.0" y="927.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">berikutnya.</text>
+<line x1="372.0" y1="858" x2="372.0" y2="958" stroke="#BBF7D0" stroke-width="1.4"/>
+<text x="386.0" y="874" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13" font-weight="700" fill="#15803D">Pencatatan tidak lagi bergantung ingatan</text>
+<text x="386.0" y="895.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">Data sensor tersimpan sendiri; petugas hanya</text>
+<text x="386.0" y="911.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">perlu memverifikasi dan menandatangani.</text>
+<line x1="696.0" y1="858" x2="696.0" y2="958" stroke="#BBF7D0" stroke-width="1.4"/>
+<text x="710.0" y="874" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13" font-weight="700" fill="#15803D">Laporan akreditasi selalu siap</text>
+<text x="710.0" y="895.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">Rekap bulanan bisa diunduh kapan saja tanpa</text>
+<text x="710.0" y="911.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">merekap ulang dari kertas.</text>
+<line x1="1020.0" y1="858" x2="1020.0" y2="958" stroke="#BBF7D0" stroke-width="1.4"/>
+<text x="1034.0" y="874" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="13" font-weight="700" fill="#15803D">Risiko jamur dan infeksi menurun</text>
+<text x="1034.0" y="895.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">Kondisi ruangan terjaga di rentang standar,</text>
+<text x="1034.0" y="911.0" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11.5" fill="#334155">sehingga lingkungan rawat lebih aman.</text>
+<text x="1382" y="1066" font-family="Segoe UI, Calibri, Arial, DejaVu Sans, sans-serif" font-size="11" fill="#94A3B8" text-anchor="end">Disesuaikan dengan alat yang sudah dibangun</text>
+</svg>

@@ -202,11 +202,76 @@ DHT dht(DHT_PIN, DHT_TYPE);
 // ── Status LED bawaan ESP32 (GPIO 2) ─────────────────────────
 #define LED_PIN 2
 
+// ── PENYARINGAN PEMBACAAN SENSOR ─────────────────────────────────────────────
+// DHT22 punya dua kelemahan yang harus ditangani, dan keduanya BUKAN sekadar
+// pembacaan gagal (NaN):
+//
+//   1. Saat baru menyala, sensor butuh waktu sebelum stabil. Pembacaan pertama
+//      sering berupa nilai sampah yang secara teknis ANGKA SAH — misalnya 1,2 °C.
+//      Pemeriksaan isnan() tidak menangkap ini sama sekali.
+//   2. Sesekali saat berjalan, kegagalan checksum menghasilkan lonjakan liar.
+//
+// Nilai sampah yang lolos ke database jauh lebih berbahaya daripada data hilang,
+// karena ikut tercetak di laporan akreditasi dan memicu alarm palsu.
+
+// Lama pemanasan setelah alat menyala. Selama ini sensor tetap dibaca dan
+// ditampilkan di LCD, tapi TIDAK dikirim ke server.
+#define WARMUP_MS                 30000
+// Berapa pembacaan sah berturut-turut yang harus terkumpul sebelum mulai kirim.
+#define WARMUP_MIN_GOOD_READS     3
+
+// Median dari beberapa sampel — lapis paling ampuh dan paling murah.
+// Satu lonjakan liar otomatis terbuang karena tidak pernah menjadi nilai tengah.
+#define SAMPLE_COUNT              5
+#define SAMPLE_GAP_MS             2500   // DHT22 butuh >2 detik antar pembacaan
+
+// Batas kewajaran fisik ruangan rumah sakit. Jauh lebih ketat dari batas
+// datasheet DHT22 (-40..80 °C) yang tidak berguna untuk menyaring nilai sampah.
+#define PHYS_TEMP_MIN             5.0f
+#define PHYS_TEMP_MAX             50.0f
+#define PHYS_HUM_MIN              10.0f
+#define PHYS_HUM_MAX              99.0f
+
+// Batas lompatan antar siklus. Suhu ruangan tidak mungkin berubah sebesar ini
+// dalam satu menit — kalau terjadi, hampir pasti kesalahan baca.
+#define MAX_JUMP_TEMP             5.0f
+#define MAX_JUMP_HUM              15.0f
+
+// Berapa siklus lonjakan yang sama harus bertahan sebelum diterima sebagai
+// perubahan ASLI, bukan salah baca.
+//
+// Tanpa ini, guard lonjakan berbalik jadi bahaya: kalau AC benar-benar mati dan
+// suhu melonjak 23 -> 35 °C lalu menetap, setiap pembacaan 35 akan terus ditolak
+// karena acuannya tetap 23. Ruangan panas, tapi dashboard membeku di angka lama
+// dan alarm tidak pernah berbunyi — jauh lebih berbahaya daripada nilai sampah
+// yang mau dicegah.
+//
+// Dengan nilai 2, perubahan mendadak yang nyata tertunda paling lama 2 siklus
+// (sekitar 2 menit), lalu diterima dan menjadi acuan baru.
+#define JUMP_CONFIRM_COUNT        2
+
+// Sensor dianggap bermasalah setelah sekian kali gagal berturut-turut.
+#define SENSOR_FAIL_ALERT_COUNT   10
+
 // ── Variabel global ───────────────────────────────────────────
 unsigned long lastSendTime = 0;
 unsigned long lastLcdRefresh = 0;
 int failCount = 0;
 bool wifiConnectedNow = false;
+
+unsigned long bootTime = 0;          // waktu alat menyala, untuk hitung masa pemanasan
+int goodReadStreak = 0;              // pembacaan sah berturut-turut sejak menyala
+bool warmupDone = false;
+float lastValidTemp = NAN;           // pembacaan sah terakhir, acuan guard lonjakan
+float lastValidHum  = NAN;
+int sensorRejectStreak = 0;          // penolakan berturut-turut — penanda sensor rusak
+unsigned long totalRejected = 0;     // total penolakan sejak menyala (untuk diagnosa)
+
+// Lonjakan yang sedang "diamati". Kalau nilai yang sama muncul lagi di siklus
+// berikutnya, berarti perubahannya nyata dan harus diterima — lihat catatan
+// pada JUMP_CONFIRM_COUNT.
+float pendingTemp = NAN, pendingHum = NAN;
+int   pendingCount = 0;
 
 // ─────────────────────────────────────────────────────────────
 //  FUNGSI: Baterai (opsional)
@@ -258,27 +323,134 @@ void disconnectWiFi() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  FUNGSI: Baca Sensor DHT22
-//  Mengembalikan false jika pembacaan gagal (NaN)
+//  PENYARINGAN SENSOR — lihat catatan panjang di bagian konstanta
 // ─────────────────────────────────────────────────────────────
-bool readSensor(float &temperature, float &humidity) {
-  humidity    = dht.readHumidity();
-  temperature = dht.readTemperature();  // Celsius — kalibrasi diterapkan di backend, BUKAN di sini
 
-  if (isnan(humidity) || isnan(temperature)) {
-    Serial.println("[Sensor] ✗ Gagal membaca DHT22. Cek wiring!");
+/** Nilai tengah dari sebuah larik kecil. Menyalin dulu supaya larik asli utuh. */
+float median(float *src, int n) {
+  float a[SAMPLE_COUNT];
+  for (int i = 0; i < n; i++) a[i] = src[i];
+  // Insertion sort — n cuma 5, tidak perlu algoritma rumit.
+  for (int i = 1; i < n; i++) {
+    float k = a[i];
+    int j = i - 1;
+    while (j >= 0 && a[j] > k) { a[j + 1] = a[j]; j--; }
+    a[j + 1] = k;
+  }
+  return (n % 2) ? a[n / 2] : (a[n / 2 - 1] + a[n / 2]) / 2.0f;
+}
+
+/** LAPIS 1: satu pembacaan mentah, ditolak kalau NaN atau di luar batas fisik. */
+bool readOnce(float &t, float &h) {
+  h = dht.readHumidity();
+  t = dht.readTemperature();   // Celsius — kalibrasi diterapkan di backend, BUKAN di sini
+
+  if (isnan(h) || isnan(t)) return false;
+
+  // Inilah saringan yang menangkap nilai sampah saat sensor baru menyala —
+  // pembacaan seperti 1,2 °C lolos dari isnan() tapi tertahan di sini.
+  if (t < PHYS_TEMP_MIN || t > PHYS_TEMP_MAX) return false;
+  if (h < PHYS_HUM_MIN  || h > PHYS_HUM_MAX)  return false;
+  return true;
+}
+
+/**
+ * Baca sensor dengan penyaringan lengkap.
+ *
+ *   quick = true  -> satu pembacaan saja, untuk menyegarkan LCD (cepat, tanpa jeda)
+ *   quick = false -> ambil SAMPLE_COUNT sampel lalu nilai tengahnya, untuk dikirim
+ *
+ * Mengembalikan false kalau pembacaan tidak layak dipakai.
+ */
+bool readSensor(float &temperature, float &humidity, bool quick = false) {
+  if (quick) {
+    return readOnce(temperature, humidity);
+  }
+
+  // LAPIS 2 — median beberapa sampel.
+  float ts[SAMPLE_COUNT], hs[SAMPLE_COUNT];
+  int n = 0;
+  for (int i = 0; i < SAMPLE_COUNT; i++) {
+    float t, h;
+    if (readOnce(t, h)) { ts[n] = t; hs[n] = h; n++; }
+    if (i < SAMPLE_COUNT - 1) delay(SAMPLE_GAP_MS);
+  }
+
+  // Butuh mayoritas sampel sah. Kalau kurang dari separuh, sensornya bermasalah —
+  // bukan sekadar satu pembacaan meleset.
+  if (n < (SAMPLE_COUNT / 2 + 1)) {
+    sensorRejectStreak++;
+    totalRejected++;
+    Serial.println("[Sensor] ✗ Hanya " + String(n) + "/" + String(SAMPLE_COUNT) +
+                   " sampel sah — pembacaan dibuang.");
     return false;
   }
 
-  if (temperature < -40 || temperature > 80) {
-    Serial.println("[Sensor] ✗ Nilai suhu di luar range: " + String(temperature));
-    return false;
-  }
-  if (humidity < 0 || humidity > 100) {
-    Serial.println("[Sensor] ✗ Nilai kelembaban di luar range: " + String(humidity));
-    return false;
+  float t = median(ts, n);
+  float h = median(hs, n);
+
+  // LAPIS 3 — guard lompatan. Dilewati saat pembacaan sah pertama (belum ada acuan).
+  if (!isnan(lastValidTemp)) {
+    bool lompatSuhu = fabs(t - lastValidTemp) > MAX_JUMP_TEMP;
+    bool lompatHum  = fabs(h - lastValidHum)  > MAX_JUMP_HUM;
+
+    if (lompatSuhu || lompatHum) {
+      // Apakah lonjakan ini sama dengan yang diamati siklus sebelumnya?
+      // Kalau ya, berarti nilainya bertahan — perubahan nyata, bukan salah baca.
+      bool samaSepertiSebelumnya = !isnan(pendingTemp) &&
+                                   fabs(t - pendingTemp) <= MAX_JUMP_TEMP &&
+                                   fabs(h - pendingHum)  <= MAX_JUMP_HUM;
+
+      if (samaSepertiSebelumnya) {
+        pendingCount++;
+      } else {
+        pendingTemp = t; pendingHum = h; pendingCount = 1;
+      }
+
+      if (pendingCount < JUMP_CONFIRM_COUNT) {
+        sensorRejectStreak++;
+        totalRejected++;
+        Serial.println("[Sensor] ? Lonjakan " + String(fabs(t - lastValidTemp), 1) +
+                       " °C dari " + String(lastValidTemp, 1) +
+                       " — ditahan dulu, menunggu konfirmasi siklus berikutnya.");
+        return false;
+      }
+
+      // Bertahan cukup lama: terima sebagai keadaan baru. Ini yang mencegah
+      // sistem buntu saat AC benar-benar mati dan suhu melonjak lalu menetap.
+      Serial.println("[Sensor] ! Lonjakan bertahan " + String(pendingCount) +
+                     " siklus — diterima sebagai perubahan NYATA: " +
+                     String(lastValidTemp, 1) + " -> " + String(t, 1) + " °C.");
+    }
   }
 
+  temperature = t;
+  humidity    = h;
+  lastValidTemp = t;
+  lastValidHum  = h;
+  pendingTemp = NAN; pendingHum = NAN; pendingCount = 0;
+  sensorRejectStreak = 0;
+  return true;
+}
+
+/**
+ * LAPIS 0 — masa pemanasan.
+ * DHT22 butuh waktu sebelum stabil setelah alat menyala. Selama masa ini sensor
+ * tetap dibaca dan ditampilkan di LCD, tapi TIDAK dikirim ke server, supaya nilai
+ * sampah awal tidak pernah masuk database.
+ *
+ * Pemanasan dinyatakan selesai kalau DUA syarat terpenuhi: waktunya sudah lewat,
+ * DAN sudah terkumpul beberapa pembacaan sah berturut-turut. Syarat kedua penting —
+ * kalau sensornya memang rusak, waktu saja tidak membuktikan apa-apa.
+ */
+bool warmupSelesai() {
+  if (warmupDone) return true;
+
+  if (millis() - bootTime < WARMUP_MS) return false;
+  if (goodReadStreak < WARMUP_MIN_GOOD_READS) return false;
+
+  warmupDone = true;
+  Serial.println("[Sensor] ✓ Masa pemanasan selesai — pengiriman data dimulai.");
   return true;
 }
 
@@ -379,12 +551,25 @@ void updateNilaiLCD(float suhu, float kelembaban, float heatIndex) {
   if (isnan(heatIndex)) { lcd.print("ERROR "); }
   else { lcd.print(heatIndex, 1); lcd.write(byte(2)); lcd.print("C "); }
 
-  // Baris status: WiFi + baterai (kalau monitoring aktif)
+  // Baris status. Urutan prioritas dipilih berdasarkan apa yang paling perlu
+  // diketahui petugas saat melihat layar:
+  //   1. Sensor bermasalah  — angka di layar tidak bisa dipercaya
+  //   2. Sedang memanas     — angka sudah tampil tapi belum dikirim ke server
+  //   3. Status WiFi/baterai — keadaan normal
   lcd.setCursor(2, 3);
-  String statusLine = wifiConnectedNow ? "WiFi: OK" : "WiFi: Off (hemat)";
-  if (BATTERY_MONITORING_ENABLED) {
-    int pct = readBatteryPercent();
-    statusLine += "  Bat:" + String(pct) + "%";
+  String statusLine;
+  if (sensorRejectStreak >= SENSOR_FAIL_ALERT_COUNT) {
+    statusLine = "SENSOR BERMASALAH";
+  } else if (!warmupDone) {
+    unsigned long lewat = millis() - bootTime;
+    int sisa = (lewat < WARMUP_MS) ? (WARMUP_MS - lewat) / 1000 : 0;
+    statusLine = "Pemanasan " + String(sisa) + "s";
+  } else {
+    statusLine = wifiConnectedNow ? "WiFi: OK" : "WiFi: Off (hemat)";
+    if (BATTERY_MONITORING_ENABLED) {
+      int pct = readBatteryPercent();
+      statusLine += "  Bat:" + String(pct) + "%";
+    }
   }
   while (statusLine.length() < 18) statusLine += ' ';  // padding biar sisa karakter lama ketimpa
   lcd.print(statusLine.substring(0, 18));
@@ -430,9 +615,13 @@ void setup() {
   Serial.println("[System] Menunggu sensor stabil (3 detik)...");
   delay(3000);
 
+  bootTime = millis();   // titik awal masa pemanasan
+
   Serial.println("[System] Siap. Kirim tiap " + String(SEND_INTERVAL_MS / 1000) +
                   " detik, refresh LCD tiap " + String(LCD_REFRESH_MS / 1000) + " detik.");
   Serial.println("[System] WiFi HANYA aktif sesaat saat kirim data (hemat baterai 18650).");
+  Serial.println("[System] Masa pemanasan " + String(WARMUP_MS / 1000) + " detik — selama itu "
+                 "sensor dibaca & tampil di LCD, tapi BELUM dikirim ke server.");
 
   tampilkanHeader();
 
@@ -449,15 +638,20 @@ void loop() {
   unsigned long now = millis();
 
   // ── Refresh LCD dari pembacaan sensor lokal ──
+  // Pakai mode 'quick' (satu pembacaan) supaya LCD tetap responsif — mengambil
+  // 5 sampel di sini akan membuat tampilan tersendat 10 detik tiap siklus.
   if (now - lastLcdRefresh >= LCD_REFRESH_MS || lastLcdRefresh == 0) {
     lastLcdRefresh = now;
     float temperature, humidity;
 
-    if (readSensor(temperature, humidity)) {
+    if (readSensor(temperature, humidity, true)) {
+      if (goodReadStreak < 1000) goodReadStreak++;   // dipakai menutup masa pemanasan
       float heatIndex = dht.computeHeatIndex(temperature, humidity, false);
       updateNilaiLCD(temperature, humidity, heatIndex);
-      Serial.println("[Sensor] Suhu: " + String(temperature, 1) + "C  Kelembaban: " + String(humidity, 1) + "%");
+      Serial.println("[Sensor] Suhu: " + String(temperature, 1) + "C  Kelembaban: " + String(humidity, 1) + "%" +
+                     (warmupDone ? "" : "   (pemanasan)"));
     } else {
+      goodReadStreak = 0;   // rentetan terputus, masa pemanasan diulang dari nol
       updateNilaiLCD(NAN, NAN, NAN);
       for (int i = 0; i < 4; i++) { digitalWrite(LED_PIN, !digitalRead(LED_PIN)); delay(300); }
     }
@@ -466,21 +660,41 @@ void loop() {
   // ── Kirim ke server (radio WiFi cuma nyala di sini) ──
   if (now - lastSendTime >= SEND_INTERVAL_MS || lastSendTime == 0) {
     lastSendTime = now;
-    float temperature, humidity;
 
-    if (readSensor(temperature, humidity)) {
-      digitalWrite(LED_PIN, LOW);
-      bool success = sendTelemetry(temperature, humidity);
-      if (success) {
-        digitalWrite(LED_PIN, HIGH);
-        delay(200);
+    // LAPIS 0 — jangan kirim apa pun selama masa pemanasan. Nilai sampah awal
+    // DHT22 (misalnya 1,2 °C) tertahan di sini dan tidak pernah masuk database.
+    if (!warmupSelesai()) {
+      unsigned long sisa = (millis() - bootTime < WARMUP_MS)
+                           ? (WARMUP_MS - (millis() - bootTime)) / 1000 : 0;
+      Serial.println("[Sensor] Masa pemanasan — belum mengirim. Sisa ~" + String(sisa) +
+                     " detik, pembacaan sah berturut-turut: " + String(goodReadStreak) +
+                     "/" + String(WARMUP_MIN_GOOD_READS));
+    } else {
+      float temperature, humidity;
+
+      if (readSensor(temperature, humidity)) {
         digitalWrite(LED_PIN, LOW);
+        bool success = sendTelemetry(temperature, humidity);
+        if (success) {
+          digitalWrite(LED_PIN, HIGH);
+          delay(200);
+          digitalWrite(LED_PIN, LOW);
+        } else {
+          for (int i = 0; i < 6; i++) { digitalWrite(LED_PIN, !digitalRead(LED_PIN)); delay(150); }
+        }
+        // Refresh LCD sekali lagi supaya status WiFi/baterai yang baru langsung kelihatan
+        float heatIndex = dht.computeHeatIndex(temperature, humidity, false);
+        updateNilaiLCD(temperature, humidity, heatIndex);
       } else {
-        for (int i = 0; i < 6; i++) { digitalWrite(LED_PIN, !digitalRead(LED_PIN)); delay(150); }
+        // Penolakan dicatat, tidak dibuang diam-diam. Sensor yang sering ditolak
+        // berarti mulai rusak — itu informasi berharga bagi teknisi.
+        Serial.println("[Sensor] Siklus kirim dilewati. Penolakan berturut-turut: " +
+                       String(sensorRejectStreak) + ", total sejak menyala: " + String(totalRejected));
+        if (sensorRejectStreak >= SENSOR_FAIL_ALERT_COUNT) {
+          Serial.println("[Sensor] !! SENSOR BERMASALAH — " + String(sensorRejectStreak) +
+                         " penolakan berturut-turut. Periksa wiring atau ganti DHT22.");
+        }
       }
-      // Refresh LCD sekali lagi supaya status WiFi/baterai yang baru langsung kelihatan
-      float heatIndex = dht.computeHeatIndex(temperature, humidity, false);
-      updateNilaiLCD(temperature, humidity, heatIndex);
     }
   }
 
