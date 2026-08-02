@@ -94,11 +94,23 @@ def _device_id_dari_request() -> str:
 
 
 def _catat_status_kunci(device_id: str, ok: bool) -> None:
-    """Catat hasil pemeriksaan kunci, dan umumkan kalau sebuah alat baru saja beres."""
+    """
+    Catat hasil pemeriksaan kunci dan umumkan sekali per alat.
+
+    Kunci yang benar SELALU dicatat saat pertama kali alat terlihat, bukan hanya
+    saat berpindah dari salah ke benar. Versi sebelumnya hanya mencatat
+    perpindahan, akibatnya alat yang sudah benar sejak server menyala tidak
+    pernah menghasilkan baris apa pun — dan tidak adanya baris itu mustahil
+    dibedakan dari "backend belum ter-deploy". Konfirmasi yang hanya muncul
+    kadang-kadang tidak berguna sebagai penanda kesiapan.
+    """
     sebelumnya = _status_kunci.get(device_id)
     _status_kunci[device_id] = {"ok": ok, "terakhir": time.time()}
-    if ok and sebelumnya is not None and not sebelumnya.get("ok"):
-        # Sinyal positif yang jelas: unit ini sudah di-flash dengan kunci benar.
+    if not ok:
+        return                                  # sisi gagal sudah dicatat oleh _fail()
+    if sebelumnya is None:
+        logger.info("[AUTH] %s: kunci BENAR.", device_id)
+    elif not sebelumnya.get("ok"):
         logger.info("[AUTH] %s sekarang mengirim kunci yang BENAR.", device_id)
 
 
