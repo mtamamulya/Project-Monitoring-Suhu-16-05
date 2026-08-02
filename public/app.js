@@ -35,6 +35,10 @@ const CONFIG = {
 };
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
+// Catatan lengkap /api/sensor-status per device (termasuk baterai), dipakai
+// halaman detail ruangan. State.sensorStatuses hanya menyimpan status koneksi.
+let _sensorStatusTerakhir = {};
+
 const State = {
   latestTemp:   null,
   latestHum:    null,
@@ -3385,6 +3389,7 @@ function selectRoomDetail(roomId) {
 
   const room = ROOM_CONFIG.find(r => r.id === roomId);
   setText('dashboard-detail-room-name', room ? room.name : roomId);
+  _renderBateraiDetail(roomId);
 
   $('dashboard-overview').style.display = 'none';
   $('dashboard-detail').style.display = '';
@@ -3693,8 +3698,12 @@ async function fetchSensorStatus() {
     
     // Simpan status tiap sensor ke State agar fungsi lain bisa baca
     State.sensorStatuses = {};
+    _sensorStatusTerakhir = {};   // catatan lengkap (termasuk baterai) untuk halaman detail
     data.forEach(s => {
-      if (s.device_id) State.sensorStatuses[s.device_id] = s.status;
+      if (s.device_id) {
+        State.sensorStatuses[s.device_id] = s.status;
+        _sensorStatusTerakhir[s.device_id] = s;
+      }
       if (!s.unknown) {
         if (s.status === 'online' || s.status === 'warning') {
           onlineCount++;
@@ -3769,6 +3778,10 @@ async function fetchSensorStatus() {
 
     // Render room status grid di dashboard
     renderRoomGrid(data);
+
+    // Pil baterai di halaman detail — ikut diperbarui tiap polling, supaya
+    // angkanya tidak basi saat halaman detail dibiarkan terbuka lama.
+    if (State.selectedRoom) _renderBateraiDetail(State.selectedRoom);
 
     // ── Browser push notification saat status sensor berubah ──
     data.forEach(_checkPushNotifForSensor);
@@ -3892,19 +3905,80 @@ function renderRoomGrid(sensorData) {
  * yang ditampilkan, bukan "0%". Menampilkan nol untuk perangkat yang memang tidak
  * punya sensor baterai akan terbaca sebagai baterai habis.
  */
+/** Warna baterai menurut sisa daya. Ambang diturunkan dari kurva Li-ion:
+ *  di bawah 20% tegangan mulai jatuh cepat, jadi itu saat yang tepat untuk
+ *  mulai menyiapkan penggantian — bukan menunggu sampai benar-benar habis. */
+function _warnaBaterai(pct) {
+  if (pct <= 20) return 'var(--crit)';
+  if (pct <= 40) return 'var(--amber)';
+  return 'var(--emerald)';
+}
+
+/**
+ * Ikon baterai sebagai SVG — bentuk baterai sungguhan dengan isi yang mengikuti
+ * persentase.
+ *
+ * Versi sebelumnya memakai karakter blok (▮▯). Di banyak font karakter itu tidak
+ * tersedia dan browser menggantinya dengan kotak kosong, sehingga tampil sebagai
+ * "tofu" — persis yang terlihat di dashboard. SVG tidak punya masalah itu:
+ * bentuknya sama di semua perangkat dan tetap tajam saat diperbesar.
+ */
+function _ikonBateraiSvg(pct, tinggi = 13) {
+  const w = tinggi * 1.85;              // proporsi baterai mendatar
+  const warna = _warnaBaterai(pct);
+  // Sisa daya kecil tetap diberi lebar minimum supaya isinya masih terlihat —
+  // KECUALI benar-benar 0%, yang harus tampil kosong. Tanpa pengecualian ini,
+  // 0% dan 8% tampak persis sama di layar.
+  const isi = pct <= 0 ? 0 : Math.max(0.08, Math.min(1, pct / 100));
+  const bodyW = w * 0.82, padX = w * 0.055, padY = tinggi * 0.16;
+  const dalamW = (bodyW - padX * 2) * isi;
+  return `<svg width="${w.toFixed(1)}" height="${tinggi}" viewBox="0 0 ${w.toFixed(1)} ${tinggi}"
+       fill="none" style="flex-shrink:0;" aria-hidden="true">
+    <rect x="0.6" y="0.6" width="${(bodyW - 1.2).toFixed(1)}" height="${(tinggi - 1.2).toFixed(1)}"
+          rx="${(tinggi * 0.22).toFixed(1)}" stroke="${warna}" stroke-width="1.2"/>
+    <rect x="${(bodyW + 0.8).toFixed(1)}" y="${(tinggi * 0.32).toFixed(1)}"
+          width="${(w - bodyW - 1.4).toFixed(1)}" height="${(tinggi * 0.36).toFixed(1)}"
+          rx="${(tinggi * 0.1).toFixed(1)}" fill="${warna}"/>
+    <rect x="${padX.toFixed(1)}" y="${padY.toFixed(1)}" width="${dalamW.toFixed(1)}"
+          height="${(tinggi - padY * 2).toFixed(1)}" rx="${(tinggi * 0.12).toFixed(1)}" fill="${warna}"/>
+  </svg>`;
+}
+
+/**
+ * Label baterai untuk kartu ruangan.
+ *
+ * Unit tanpa modul voltage sensor mengirim null — dalam hal itu tidak ada apa pun
+ * yang ditampilkan, bukan "0%". Menampilkan nol untuk perangkat yang memang tidak
+ * punya sensor baterai akan terbaca sebagai baterai habis.
+ */
 function _labelBaterai(pct, volt) {
   if (pct == null) return { html: '', kritis: false };
-
-  // Ambang diturunkan dari kurva Li-ion: di bawah 20% tegangan mulai jatuh cepat,
-  // jadi itu batas yang masuk akal untuk mulai menyiapkan penggantian baterai.
-  let warna = 'var(--emerald)', ikon = '▮▮▮';
-  if (pct <= 10)      { warna = 'var(--crit)';  ikon = '▮'; }
-  else if (pct <= 20) { warna = 'var(--crit)';  ikon = '▮▯▯'; }
-  else if (pct <= 40) { warna = 'var(--amber)'; ikon = '▮▮▯'; }
-
+  const warna = _warnaBaterai(pct);
   const judul = volt != null ? `Baterai ${pct}% (${volt.toFixed(2)} V)` : `Baterai ${pct}%`;
   return {
     kritis: pct <= 20,
-    html: `<span title="${judul}" style="font-size:11px;font-weight:600;color:${warna};white-space:nowrap;">${ikon} ${pct}%</span>`,
+    html: `<span title="${judul}" style="display:inline-flex;align-items:center;gap:4px;
+                 font-size:11px;font-weight:600;color:${warna};white-space:nowrap;">
+             ${_ikonBateraiSvg(pct, 12)}${pct}%
+           </span>`,
   };
+}
+
+/** Pil baterai di halaman detail ruangan — lebih besar, sekaligus menampilkan tegangan. */
+function _renderBateraiDetail(deviceId) {
+  const el = $('detail-battery');
+  if (!el) return;
+  const s = _sensorStatusTerakhir[deviceId];
+  const pct = s ? s.battery_pct : null;
+
+  if (pct == null) { el.style.display = 'none'; return; }   // unit tanpa sensor baterai
+
+  const warna = _warnaBaterai(pct);
+  const volt  = s.battery_v != null ? ` · ${s.battery_v.toFixed(2)} V` : '';
+  el.style.display = 'inline-flex';
+  el.style.cssText += ';align-items:center;gap:6px;padding:4px 10px;border-radius:20px;' +
+                      `border:1px solid ${warna};background:var(--card);`;
+  el.innerHTML = `${_ikonBateraiSvg(pct, 14)}
+    <span style="font-size:12px;font-weight:650;color:${warna};">${pct}%${volt}</span>` +
+    (pct <= 20 ? `<span style="font-size:11px;color:${warna};">· segera ganti</span>` : '');
 }
