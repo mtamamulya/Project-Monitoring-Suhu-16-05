@@ -31,13 +31,25 @@ AUTH_ENFORCE=true di Render untuk mengunci sepenuhnya.
 
 import logging
 import os
+import time
 from functools import wraps
 
 from flask import request, jsonify
 
 logger = logging.getLogger(__name__)
 
-_warned = set()
+# key -> waktu terakhir diperingatkan. Dulu ini set, artinya tiap jenis masalah
+# hanya dicatat SEKALI seumur hidup proses. Untuk peringatan device key itu
+# berbahaya: alat pertama yang salah kunci memicu peringatan, lalu lima alat
+# lain yang juga salah lewat tanpa jejak. Log yang sunyi jadi tampak seperti
+# "semua sudah benar" padahal belum — persis kesimpulan keliru yang membuat
+# orang menyalakan AUTH_ENFORCE terlalu cepat.
+_warned: dict = {}
+_WARN_INTERVAL_S = 1800   # ulangi peringatan tiap 30 menit selama masalah belum beres
+
+# Status kunci per alat, dipakai halaman Setting supaya tidak perlu menelusuri
+# log Render satu per satu sebelum menyalakan AUTH_ENFORCE.
+_status_kunci: dict = {}   # device_id -> {"ok": bool, "terakhir": epoch}
 
 
 def _enforcing() -> bool:
@@ -45,9 +57,12 @@ def _enforcing() -> bool:
     return os.environ.get("AUTH_ENFORCE", "").strip().lower() in ("1", "true", "yes")
 
 
-def _warn_once(key: str, message: str) -> None:
-    if key not in _warned:
-        _warned.add(key)
+def _warn_berkala(key: str, message: str) -> None:
+    """Catat peringatan, lalu diam sebentar supaya log tidak banjir — tapi TIDAK
+    diam selamanya, karena masalah yang masih berlangsung harus tetap terlihat."""
+    sekarang = time.time()
+    if sekarang - _warned.get(key, 0) >= _WARN_INTERVAL_S:
+        _warned[key] = sekarang
         logger.warning(message)
 
 
@@ -58,8 +73,41 @@ def _fail(reason: str, key: str, hint: str):
     """
     if _enforcing():
         return jsonify({"error": reason}), 401
-    _warn_once(key, f"[AUTH] {reason} — DILEWATKAN karena AUTH_ENFORCE belum aktif. {hint}")
+    _warn_berkala(key, f"[AUTH] {reason} — DILEWATKAN karena AUTH_ENFORCE belum aktif. {hint}")
     return None
+
+
+def _device_id_dari_request() -> str:
+    """
+    Ambil device_id dari badan permintaan untuk keperluan log.
+
+    Nilai ini TIDAK dipakai untuk mengambil keputusan keamanan — hanya untuk
+    memberi tahu unit mana yang perlu di-flash ulang. Kalau isinya ngawur,
+    paling buruk hanya membuat pesan log ikut ngawur.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        nilai = str(data.get("device_id") or "").strip()
+        return nilai[:40] if nilai else "TANPA-ID"
+    except Exception:
+        return "TANPA-ID"
+
+
+def _catat_status_kunci(device_id: str, ok: bool) -> None:
+    """Catat hasil pemeriksaan kunci, dan umumkan kalau sebuah alat baru saja beres."""
+    sebelumnya = _status_kunci.get(device_id)
+    _status_kunci[device_id] = {"ok": ok, "terakhir": time.time()}
+    if ok and sebelumnya is not None and not sebelumnya.get("ok"):
+        # Sinyal positif yang jelas: unit ini sudah di-flash dengan kunci benar.
+        logger.info("[AUTH] %s sekarang mengirim kunci yang BENAR.", device_id)
+
+
+def status_kunci_perangkat() -> dict:
+    """Ringkasan status kunci tiap alat, untuk ditampilkan di halaman Setting."""
+    return {
+        dev: {"ok": bool(v["ok"]), "terakhir": v["terakhir"]}
+        for dev, v in _status_kunci.items()
+    }
 
 
 def require_device_key(fn):
@@ -78,14 +126,24 @@ def require_device_key(fn):
             return fn(*args, **kwargs)
 
         provided = request.headers.get("X-Device-Key", "")
+        device_id = _device_id_dari_request()
+
         if provided != expected:
+            _catat_status_kunci(device_id, False)
+            sebab = ("belum mengirim header X-Device-Key sama sekali"
+                     if not provided else "mengirim X-Device-Key yang tidak cocok")
             failed = _fail(
-                "Device key tidak valid",
-                "device_key_bad",
-                "ESP32 mengirim X-Device-Key yang salah atau belum mengirimnya sama sekali.",
+                f"Device key tidak valid dari {device_id}",
+                # Kunci dedup dibuat per alat: kalau dijadikan satu, unit pertama
+                # yang bermasalah akan menutupi unit-unit lain yang juga bermasalah.
+                f"device_key_bad:{device_id}",
+                f"Unit {device_id} {sebab}. Flash ulang unit ini dengan "
+                f"DEVICE_API_KEY yang sama seperti di Render.",
             )
             if failed:
                 return failed
+        else:
+            _catat_status_kunci(device_id, True)
         return fn(*args, **kwargs)
     return wrapper
 

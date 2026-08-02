@@ -30,7 +30,9 @@ from services import config as config_service
 from services import alerts_log
 from services import retention
 from services.timeutil import today_start_utc, parse_date_wib, dalam_jendela_shift
-from services.auth import require_device_key, require_user, actor_email
+from services.auth import (
+    require_device_key, require_user, actor_email, status_kunci_perangkat,
+)
 from routes.ai import handle_chat
 from routes.analytics import run_analytics
 from routes import admin as admin_routes
@@ -933,10 +935,18 @@ def firmware_status():
     """
     terbaru = os.environ.get("FIRMWARE_VERSION", "").strip()
     semua = get_all_latest()
+    kunci = status_kunci_perangkat()
     unit = []
+    belum_siap = []
     for device_id, cfg in ROOM_CONFIG.items():
         rec = semua.get(device_id) or {}
         versi = rec.get("fw_version")
+        k = kunci.get(device_id)
+        # None = alat ini belum pernah mengirim sejak server terakhir menyala,
+        # jadi statusnya belum diketahui — berbeda dari "sudah dipastikan salah".
+        kunci_ok = None if k is None else bool(k["ok"])
+        if kunci_ok is False:
+            belum_siap.append(device_id)
         unit.append({
             "device_id":  device_id,
             "room_name":  cfg.get("name", device_id),
@@ -944,12 +954,17 @@ def firmware_status():
             # None kalau alat belum pernah melapor versi (firmware lama), supaya
             # tidak keliru ditampilkan sebagai "sudah terbaru".
             "up_to_date": (versi == terbaru) if (versi and terbaru) else None,
+            "key_ok":     kunci_ok,
         })
     return jsonify({
         "latest":     terbaru or None,
         "url":        os.environ.get("FIRMWARE_URL", "").strip() or None,
         "configured": bool(terbaru and os.environ.get("FIRMWARE_URL", "").strip()),
         "devices":    unit,
+        # Dipakai halaman Setting untuk memperingatkan sebelum AUTH_ENFORCE
+        # dinyalakan. Alat yang ada di daftar ini akan langsung ditolak 401.
+        "auth_enforced":  os.environ.get("AUTH_ENFORCE", "").strip().lower() in ("1", "true", "yes"),
+        "kunci_bermasalah": belum_siap,
     })
 
 

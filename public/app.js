@@ -1911,6 +1911,15 @@ async function loadAdminPage() {
   renderAdminAuditLog();
 }
 
+/** Kotak pemberitahuan di atas daftar firmware. Judul wajib, penjelasan opsional. */
+function _fwBanner(warna, judul, isi) {
+  return `<div style="border-left:3px solid ${warna};background:var(--bg-2);
+                      padding:10px 12px;border-radius:6px;margin-bottom:10px;">
+      <div style="font-size:12.5px;font-weight:600;color:${warna};">${escHtml(judul)}</div>
+      ${isi ? `<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:4px;">${isi}</div>` : ''}
+    </div>`;
+}
+
 /**
  * Daftar versi firmware tiap alat.
  *
@@ -1929,34 +1938,75 @@ async function renderAdminFirmware() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
 
-    if (!d.configured) {
-      if (head) head.textContent = 'Pembaruan jarak jauh belum diaktifkan';
-      list.innerHTML =
-        '<p style="font-size:12.5px;color:var(--muted);line-height:1.65;">' +
-          'Set <code>FIRMWARE_VERSION</code> dan <code>FIRMWARE_URL</code> di dashboard Render ' +
-          'untuk mengaktifkan pembaruan jarak jauh. Selama belum diset, alat tetap berjalan normal ' +
-          'dengan firmware yang terpasang.' +
-        '</p>';
-      return;
+    if (head) {
+      head.innerHTML = d.configured
+        ? 'Versi terbaru: <strong>' + escHtml(d.latest) + '</strong>'
+        : 'Pembaruan jarak jauh belum diaktifkan';
     }
 
-    if (head) head.innerHTML = 'Versi terbaru: <strong>' + escHtml(d.latest) + '</strong>';
+    const unit = d.devices || [];
 
-    list.innerHTML = (d.devices || []).map(u => {
+    // ── Ringkasan kunci perangkat ────────────────────────────────────────────
+    // Ini yang menentukan aman-tidaknya menyalakan AUTH_ENFORCE. Ditaruh paling
+    // atas karena akibat salah waktu di sini permanen: data yang ditolak 401
+    // tidak disimpan di mana pun dan tidak bisa dikirim ulang.
+    const bermasalah = d.kunci_bermasalah || [];
+    const belumLapor = unit.filter(u => u.key_ok === null).length;
+    let banner = '';
+
+    if (d.auth_enforced) {
+      banner = bermasalah.length
+        ? _fwBanner('var(--crit)',
+            'AUTH_ENFORCE aktif, tapi ' + bermasalah.length + ' alat memakai kunci yang salah',
+            'Data dari ' + escHtml(bermasalah.join(', ')) + ' sedang <strong>ditolak dan hilang</strong>. ' +
+            'Kembalikan AUTH_ENFORCE ke false di Render, atau flash ulang alat tersebut sekarang.')
+        : _fwBanner('var(--emerald)', 'Terkunci — hanya alat dengan kunci yang benar bisa mengirim', '');
+    } else if (bermasalah.length) {
+      banner = _fwBanner('var(--amber)',
+        bermasalah.length + ' alat belum memakai kunci yang benar',
+        'Datanya masih diterima karena <code>AUTH_ENFORCE</code> belum aktif. ' +
+        'Flash ulang <strong>' + escHtml(bermasalah.join(', ')) + '</strong> sebelum menyalakannya.');
+    } else if (belumLapor === unit.length) {
+      banner = _fwBanner('var(--muted-2)', 'Belum ada alat yang mengirim sejak server terakhir menyala',
+        'Status kunci baru bisa dipastikan setelah tiap alat mengirim sekali.');
+    } else {
+      banner = _fwBanner('var(--emerald)',
+        'Semua alat yang aktif sudah memakai kunci yang benar',
+        belumLapor ? belumLapor + ' alat lain belum mengirim sejak server menyala, jadi belum bisa dipastikan.' : '');
+    }
+
+    list.innerHTML = banner + unit.map(u => {
       let warna, label;
-      if (u.up_to_date === true)       { warna = 'var(--emerald)'; label = 'terbaru'; }
-      else if (u.up_to_date === false) { warna = 'var(--amber)';   label = 'menunggu pembaruan'; }
-      else                             { warna = 'var(--muted-2)'; label = 'belum melapor'; }
+      if (!d.configured)                    { warna = 'var(--muted-2)'; label = 'OTA nonaktif'; }
+      else if (u.up_to_date === true)       { warna = 'var(--emerald)'; label = 'terbaru'; }
+      else if (u.up_to_date === false)      { warna = 'var(--amber)';   label = 'menunggu pembaruan'; }
+      else                                  { warna = 'var(--muted-2)'; label = 'belum melapor'; }
+
+      let kWarna, kLabel;
+      if (u.key_ok === true)       { kWarna = 'var(--emerald)'; kLabel = 'kunci ok'; }
+      else if (u.key_ok === false) { kWarna = 'var(--crit)';    kLabel = 'kunci salah'; }
+      else                         { kWarna = 'var(--muted-2)'; kLabel = 'kunci ?'; }
+
       return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;
                           padding:8px 12px;background:var(--bg-2);border-radius:8px;">
           <span style="font-size:13px;font-weight:500;">${escHtml(u.room_name)}</span>
           <span style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
             <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);">
               ${escHtml(u.fw_version || '—')}</span>
+            <span style="font-size:11px;font-weight:600;color:${kWarna};">${kLabel}</span>
             <span style="font-size:11px;font-weight:600;color:${warna};">${label}</span>
           </span>
         </div>`;
     }).join('');
+
+    if (!d.configured) {
+      list.innerHTML +=
+        '<p style="font-size:12.5px;color:var(--muted);line-height:1.65;margin-top:10px;">' +
+          'Set <code>FIRMWARE_VERSION</code> dan <code>FIRMWARE_URL</code> di dashboard Render ' +
+          'untuk mengaktifkan pembaruan jarak jauh. Selama belum diset, alat tetap berjalan normal ' +
+          'dengan firmware yang terpasang.' +
+        '</p>';
+    }
 
   } catch (e) {
     list.innerHTML = '<p style="color:var(--crit);font-size:12.5px;">Gagal memuat versi firmware.</p>';
