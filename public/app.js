@@ -3803,6 +3803,31 @@ async function fetchSensorStatus() {
     console.warn('[SensorStatus]', e.message);
   }
 }
+/**
+ * Ubah waktu pembacaan terakhir jadi keterangan yang mudah dibaca.
+ *
+ * Menyebut JAM saja tidak cukup — "23:04" tidak memberi tahu apakah itu 5 menit
+ * lalu atau kemarin. Menyebut selisihnya saja juga kurang, karena orang ingin
+ * tahu jam pastinya untuk mencocokkan dengan kejadian di ruangan. Jadi keduanya
+ * ditampilkan, kecuali kalau sudah lewat sehari (jamnya jadi tidak relevan).
+ */
+function _umurData(lastSeen) {
+  if (!lastSeen) return 'waktu tidak tercatat';
+  const t = new Date(lastSeen);
+  if (isNaN(t)) return 'waktu tidak tercatat';
+
+  const menit = Math.max(0, Math.floor((Date.now() - t.getTime()) / 60000));
+  const jam = t.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+  if (menit < 1)    return `terakhir ${jam}, baru saja`;
+  if (menit < 60)   return `terakhir ${jam}, ${menit} menit lalu`;
+  if (menit < 1440) return `terakhir ${jam}, ${Math.floor(menit / 60)} jam lalu`;
+
+  const hari = Math.floor(menit / 1440);
+  return `terakhir ${t.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}, ` +
+         `${hari} hari lalu`;
+}
+
 // ── ROOM STATUS GRID ──────────────────────────────────────────
 function renderRoomGrid(sensorData) {
   const grid = $('room-status-grid');
@@ -3838,9 +3863,16 @@ function renderRoomGrid(sensorData) {
     let healthLabel = '✓ Normal';
     let healthColor = 'var(--emerald)';
 
+    // Angka dari sensor yang sudah offline adalah pembacaan TERAKHIR sebelum
+    // alat mati, bukan keadaan sekarang. Tetap ditampilkan (berguna untuk tahu
+    // kondisi ruangan saat alat berhenti, kadang justru itu petunjuk penyebabnya),
+    // tapi harus jelas bahwa itu bukan angka terkini — kalau tidak, ruangan yang
+    // sama sekali tidak terpantau justru terlihat seolah terpantau.
+    const basi = (status === 'offline' || status === 'never') && temp != null;
+
     if (status === 'offline' || status === 'never') {
       cardClass += ' room-offline';
-      healthLabel = '— Tidak ada data';
+      healthLabel = basi ? '— Data terakhir' : '— Tidak ada data';
       healthColor = 'var(--muted)';
     } else if (temp != null) {
       const tempBad = temp < tempMin - 2 || temp > tempMax + 2;
@@ -3860,9 +3892,12 @@ function renderRoomGrid(sensorData) {
     }
 
     // ── Warna nilai per threshold ──
-    const tempColor = temp == null ? 'var(--muted)'
+    // Nilai basi selalu abu-abu, apa pun angkanya. Mewarnainya merah/hijau akan
+    // memberi kesan penilaian atas keadaan sekarang — padahal keadaan sekarang
+    // justru tidak diketahui.
+    const tempColor = basi || temp == null ? 'var(--muted-2)'
       : (temp < tempMin || temp > tempMax) ? 'var(--coral)' : 'var(--emerald)';
-    const humColor = hum == null ? 'var(--muted)'
+    const humColor = basi || hum == null ? 'var(--muted-2)'
       : (hum < humMin || hum > humMax) ? 'var(--sky)' : 'var(--emerald)';
 
     const tempStr = temp != null ? temp.toFixed(1) + '°C' : '—';
@@ -3870,11 +3905,29 @@ function renderRoomGrid(sensorData) {
     const floor   = s.floor || room.floor || '';
     const batt    = _labelBaterai(s.battery_pct, s.battery_v);
 
+    // Pita penanda data basi. Tanpa ini, kartu memajang angka besar sementara
+    // labelnya bilang tidak ada data — perawat yang melirik sekilas akan membaca
+    // angka lama sebagai keadaan sekarang, dan ruangan yang sama sekali tidak
+    // terpantau justru terlihat seolah terpantau.
+    const pitaBasi = basi
+      ? `<div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;padding:4px 8px;
+                     border-radius:6px;background:var(--bg-2);border:1px solid var(--hair);">
+           <svg style="width:12px;height:12px;flex-shrink:0;color:var(--muted);" fill="none"
+                viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+             <circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 7v5l3 2"/>
+           </svg>
+           <span style="font-size:10.5px;font-weight:600;color:var(--muted);">
+             Bukan data terkini · ${_umurData(s.last_seen)}
+           </span>
+         </div>`
+      : '';
+
     return `<div class="${cardClass}" role="button" tabindex="0" style="cursor:pointer;" onclick="window.selectRoomDetail('${room.id}')" onkeydown="if(event.key==='Enter')window.selectRoomDetail('${room.id}')">
         <div class="room-card-header">
           <span class="room-card-name">${room.name}</span>
           ${floor ? `<span class="room-card-floor">${floor}</span>` : ''}
         </div>
+        ${pitaBasi}
         <div class="room-card-readings">
           <div class="room-reading">
             <div class="room-reading-label">Suhu</div>
