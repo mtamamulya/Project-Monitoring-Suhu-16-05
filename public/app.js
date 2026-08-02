@@ -3742,10 +3742,29 @@ async function fetchSensorStatus() {
       }
     }
 
-    // Offline warning badge (di header Status Semua Ruangan)
+    // Peringatan di header grid ruangan. Prioritas: sensor offline lebih genting
+    // daripada baterai lemah, jadi kalau keduanya terjadi, offline yang tampil.
     const offlineBanner = $('offline-warning-banner');
     if (offlineBanner) {
-      offlineBanner.style.display = hasOffline ? 'flex' : 'none';
+      const lemah = data.filter(s => s.battery_pct != null && s.battery_pct <= 20);
+      if (hasOffline) {
+        offlineBanner.style.display = 'flex';
+        offlineBanner.style.background = 'var(--crit-soft)';
+        offlineBanner.style.color = 'var(--crit)';
+        setText('offline-warning-text', 'Ada sensor offline');
+      } else if (lemah.length) {
+        // Baterai habis berarti ruangan berhenti terpantau tanpa ada yang tahu —
+        // lebih baik diperingatkan sejak 20% daripada saat sudah mati.
+        offlineBanner.style.display = 'flex';
+        offlineBanner.style.background = 'var(--amber-soft)';
+        offlineBanner.style.color = 'var(--amber)';
+        setText('offline-warning-text',
+          lemah.length === 1
+            ? `Baterai ${lemah[0].room_name} tinggal ${lemah[0].battery_pct}%`
+            : `${lemah.length} alat baterainya lemah`);
+      } else {
+        offlineBanner.style.display = 'none';
+      }
     }
 
     // Render room status grid di dashboard
@@ -3836,6 +3855,7 @@ function renderRoomGrid(sensorData) {
     const tempStr = temp != null ? temp.toFixed(1) + '°C' : '—';
     const humStr  = hum  != null ? hum.toFixed(1)  + '%'  : '—';
     const floor   = s.floor || room.floor || '';
+    const batt    = _labelBaterai(s.battery_pct, s.battery_v);
 
     return `<div class="${cardClass}" role="button" tabindex="0" style="cursor:pointer;" onclick="window.selectRoomDetail('${room.id}')" onkeydown="if(event.key==='Enter')window.selectRoomDetail('${room.id}')">
         <div class="room-card-header">
@@ -3856,8 +3876,35 @@ function renderRoomGrid(sensorData) {
         </div>
         <div class="room-card-footer">
           <span style="font-size:12px;font-weight:600;color:${healthColor};">${healthLabel}</span>
-          <span style="font-size:11px;font-weight:500;color:${conn.color};">${conn.label}</span>
+          <span style="display:flex;align-items:center;gap:8px;">
+            ${batt.html}
+            <span style="font-size:11px;font-weight:500;color:${conn.color};">${conn.label}</span>
+          </span>
         </div>
       </div>`;
   }).join('');
+}
+
+/**
+ * Label baterai untuk kartu ruangan.
+ *
+ * Unit tanpa modul voltage sensor mengirim null — dalam hal itu tidak ada apa pun
+ * yang ditampilkan, bukan "0%". Menampilkan nol untuk perangkat yang memang tidak
+ * punya sensor baterai akan terbaca sebagai baterai habis.
+ */
+function _labelBaterai(pct, volt) {
+  if (pct == null) return { html: '', kritis: false };
+
+  // Ambang diturunkan dari kurva Li-ion: di bawah 20% tegangan mulai jatuh cepat,
+  // jadi itu batas yang masuk akal untuk mulai menyiapkan penggantian baterai.
+  let warna = 'var(--emerald)', ikon = '▮▮▮';
+  if (pct <= 10)      { warna = 'var(--crit)';  ikon = '▮'; }
+  else if (pct <= 20) { warna = 'var(--crit)';  ikon = '▮▯▯'; }
+  else if (pct <= 40) { warna = 'var(--amber)'; ikon = '▮▮▯'; }
+
+  const judul = volt != null ? `Baterai ${pct}% (${volt.toFixed(2)} V)` : `Baterai ${pct}%`;
+  return {
+    kritis: pct <= 20,
+    html: `<span title="${judul}" style="font-size:11px;font-weight:600;color:${warna};white-space:nowrap;">${ikon} ${pct}%</span>`,
+  };
 }

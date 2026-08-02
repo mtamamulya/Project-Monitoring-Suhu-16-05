@@ -226,6 +226,20 @@ def telemetry():
     device_id   = str(device_id)[:64]
     now         = datetime.now(timezone.utc)
 
+    # Baterai — opsional, hanya dikirim unit yang punya modul voltage sensor.
+    # Ditolak diam-diam kalau di luar akal (pack 2S 18650: 6,0-8,4 V) supaya
+    # pembacaan ADC yang kacau tidak muncul sebagai "baterai 300%" di dashboard.
+    batt_v = body.get("battery_v")
+    batt_p = body.get("battery_pct")
+    try:
+        batt_v = round(float(batt_v), 2) if batt_v is not None and 3.0 <= float(batt_v) <= 13.0 else None
+    except (TypeError, ValueError):
+        batt_v = None
+    try:
+        batt_p = int(batt_p) if batt_p is not None and 0 <= int(batt_p) <= 100 else None
+    except (TypeError, ValueError):
+        batt_p = None
+
     # 0. Terapkan koreksi kalibrasi per unit (kalau ada) — SEBELUM disimpan/dievaluasi,
     #    supaya seluruh sistem (alert, buffer, compliance, analytics) selalu lihat nilai
     #    yang sudah terkoreksi. Offset diatur lewat halaman Admin, bukan di firmware.
@@ -243,6 +257,8 @@ def telemetry():
         "humidity":    humidity,
         "device_id":   device_id,
         "timestamp":   now,
+        "battery_v":   batt_v,
+        "battery_pct": batt_p,
     })
 
     # 2. Persist ke Firestore — DI-THROTTLE per device (should_persist), bukan tiap POST.
@@ -282,7 +298,24 @@ def telemetry():
     except Exception as exc:
         logger.warning("Alert skipped: %s", exc)
 
-    return jsonify({"status": "ok", "timestamp": now.isoformat()}), 201
+    # 5. Balas dengan batas ruangan yang berlaku SEKARANG.
+    #
+    #    Firmware memakai ini untuk menentukan status di LCD (NORMAL/WASPADA/
+    #    BAHAYA). Sebelumnya ambang itu di-hardcode di firmware, dan nilainya
+    #    ternyata untuk penyimpanan dingin — ruangan 22 °C yang sehat tampil
+    #    "BAHAYA!!!" di layar. Perawat akan berhenti mempercayai layarnya.
+    #
+    #    Dikirim menumpang respons POST yang sudah ada, BUKAN endpoint terpisah:
+    #    tidak menambah request, tidak menambah waktu radio WiFi menyala, dan
+    #    otomatis ikut berubah begitu admin menyetel ulang batas dari dashboard.
+    resp = {"status": "ok", "timestamp": now.isoformat()}
+    if room_cfg:
+        resp["limits"] = {
+            "tempMin": room_cfg["tempMin"], "tempMax": room_cfg["tempMax"],
+            "humMin":  room_cfg["humMin"],  "humMax":  room_cfg["humMax"],
+            "name":    room_cfg.get("name", device_id),
+        }
+    return jsonify(resp), 201
 
 
 # ── 2. Latest ─────────────────────────────────────────────────
@@ -362,6 +395,9 @@ def sensor_status():
             "status":      status,
             "temperature": record["temperature"] if record else None,
             "humidity":    record["humidity"]    if record else None,
+            # Baterai — None untuk unit yang tidak punya modul voltage sensor.
+            "battery_v":   record.get("battery_v")   if record else None,
+            "battery_pct": record.get("battery_pct") if record else None,
             "tempMin":     room["tempMin"],
             "tempMax":     room["tempMax"],
             "humMin":      room["humMin"],
