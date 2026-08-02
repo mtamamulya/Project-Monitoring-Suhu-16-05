@@ -29,7 +29,7 @@ from services.buffer import (
 from services import config as config_service
 from services import alerts_log
 from services import retention
-from services.timeutil import today_start_utc, parse_date_wib
+from services.timeutil import today_start_utc, parse_date_wib, dalam_jendela_shift
 from services.auth import require_device_key, require_user, actor_email
 from routes.ai import handle_chat
 from routes.analytics import run_analytics
@@ -309,6 +309,13 @@ def telemetry():
     #    tidak menambah request, tidak menambah waktu radio WiFi menyala, dan
     #    otomatis ikut berubah begitu admin menyetel ulang batas dari dashboard.
     resp = {"status": "ok", "timestamp": now.isoformat()}
+
+    # Apakah lampu latar LCD perlu menyala? Dihitung di server karena ESP32 tidak
+    # punya jam yang bertahan setelah mati, dan menambah sinkronisasi NTP berarti
+    # menyalakan radio WiFi lebih lama — menambah pemakaian baterai yang justru
+    # sedang dihemat. Firmware tinggal menurut.
+    resp["lcd_on"] = dalam_jendela_shift()
+
     if room_cfg:
         resp["limits"] = {
             "tempMin": room_cfg["tempMin"], "tempMax": room_cfg["tempMax"],

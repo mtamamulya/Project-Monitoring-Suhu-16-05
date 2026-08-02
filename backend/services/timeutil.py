@@ -58,6 +58,44 @@ def parse_date_wib(date_str: str):
     return day_bounds_utc(dt.year, dt.month, dt.day)
 
 
+# ── Jendela pencatatan shift ────────────────────────────────────────────────
+# Jam pencatatan resmi menurut Permenkes 72/2016.
+JAM_SHIFT = (7, 14, 22)
+
+# Lampu latar LCD dinyalakan sejak beberapa menit SEBELUM jam shift sampai
+# beberapa lama SESUDAHNYA. Rentangnya tidak simetris dengan sengaja: petugas
+# lebih sering terlambat daripada datang lebih awal, jadi sisi sesudah dibuat
+# lebih panjang.
+MENIT_SEBELUM_SHIFT = 15
+MENIT_SESUDAH_SHIFT = 45
+
+
+def dalam_jendela_shift(saat=None) -> bool:
+    """
+    True kalau sekarang sedang dalam jendela pencatatan shift (waktu WIB).
+
+    Dihitung di SERVER, bukan di ESP32. ESP32 tidak punya jam yang bertahan
+    setelah mati, dan menambahkan sinkronisasi NTP berarti menyalakan radio WiFi
+    lebih lama — justru menambah pemakaian baterai yang mau dihemat. Server sudah
+    tahu waktunya dan sudah membalas setiap kiriman telemetri, jadi status ini
+    cukup dititipkan di balasan itu.
+    """
+    n = (saat or now_wib()).astimezone(WIB)
+    menit_sekarang = n.hour * 60 + n.minute
+    for jam in JAM_SHIFT:
+        pusat = jam * 60
+        selisih = menit_sekarang - pusat
+        # Normalkan ke rentang -720..720 supaya jendela shift Malam (22.00) tetap
+        # terdeteksi benar saat sudah lewat tengah malam.
+        if selisih > 720:
+            selisih -= 1440
+        elif selisih < -720:
+            selisih += 1440
+        if -MENIT_SEBELUM_SHIFT <= selisih <= MENIT_SESUDAH_SHIFT:
+            return True
+    return False
+
+
 def month_bounds_utc(year: int, month: int):
     """Awal & akhir satu bulan kalender WIB, dikembalikan dalam UTC."""
     start_wib = datetime(year, month, 1, tzinfo=WIB)
