@@ -226,6 +226,10 @@ def telemetry():
     device_id   = str(device_id)[:64]
     now         = datetime.now(timezone.utc)
 
+    # Versi firmware yang dilaporkan alat — dipakai untuk tahu unit mana yang
+    # belum diperbarui, dan untuk memutuskan apakah perlu dikirimi perintah OTA.
+    fw_version = str(body.get("fw_version", ""))[:16]
+
     # Baterai — opsional, hanya dikirim unit yang punya modul voltage sensor.
     # Ditolak diam-diam kalau di luar akal (pack 2S 18650: 6,0-8,4 V) supaya
     # pembacaan ADC yang kacau tidak muncul sebagai "baterai 300%" di dashboard.
@@ -259,6 +263,7 @@ def telemetry():
         "timestamp":   now,
         "battery_v":   batt_v,
         "battery_pct": batt_p,
+        "fw_version":  fw_version or None,
     })
 
     # 2. Persist ke Firestore — DI-THROTTLE per device (should_persist), bukan tiap POST.
@@ -315,6 +320,24 @@ def telemetry():
     # menyalakan radio WiFi lebih lama — menambah pemakaian baterai yang justru
     # sedang dihemat. Firmware tinggal menurut.
     resp["lcd_on"] = dalam_jendela_shift()
+
+    # 6. Pembaruan firmware jarak jauh (OTA).
+    #
+    #    Server hanya MENGUMUMKAN versi terbaru dan alamat berkasnya; keputusan
+    #    memperbarui ada di alat, karena hanya alat yang tahu sisa baterai dan
+    #    kekuatan sinyalnya sendiri.
+    #
+    #    Berkas .bin TIDAK dilayani dari sini, melainkan dari Firebase Hosting.
+    #    Alasannya penting: melayani berkas ~1 MB dari Render akan memakan
+    #    bandwidth dan menahan proses selama unduhan — padahal Render free tier
+    #    dibatasi jam hidup. Firebase Hosting memang dirancang untuk berkas statis
+    #    dan kuotanya jauh lebih longgar (10 GB/bulan; 6 alat x 1 MB per rilis
+    #    tidak sampai 0,1%).
+    fw_terbaru = os.environ.get("FIRMWARE_VERSION", "").strip()
+    fw_url     = os.environ.get("FIRMWARE_URL", "").strip()
+    if fw_terbaru and fw_url:
+        resp["fw_latest"] = fw_terbaru
+        resp["fw_url"]    = fw_url
 
     if room_cfg:
         resp["limits"] = {
@@ -405,6 +428,8 @@ def sensor_status():
             # Baterai — None untuk unit yang tidak punya modul voltage sensor.
             "battery_v":   record.get("battery_v")   if record else None,
             "battery_pct": record.get("battery_pct") if record else None,
+            # Versi firmware yang sedang berjalan di alat ini.
+            "fw_version":  record.get("fw_version")  if record else None,
             "tempMin":     room["tempMin"],
             "tempMax":     room["tempMax"],
             "humMin":      room["humMin"],
@@ -899,6 +924,35 @@ def recent_alerts():
 
 
 # ── 17. Retensi — status & pemicu manual/cron eksternal ─────────
+@app.route("/api/admin/firmware", methods=["GET"])
+@require_user
+def firmware_status():
+    """
+    Versi firmware yang diumumkan server vs yang benar-benar berjalan di tiap alat.
+    Dipakai halaman Setting untuk melihat unit mana yang belum selesai diperbarui.
+    """
+    terbaru = os.environ.get("FIRMWARE_VERSION", "").strip()
+    semua = get_all_latest()
+    unit = []
+    for device_id, cfg in ROOM_CONFIG.items():
+        rec = semua.get(device_id) or {}
+        versi = rec.get("fw_version")
+        unit.append({
+            "device_id":  device_id,
+            "room_name":  cfg.get("name", device_id),
+            "fw_version": versi,
+            # None kalau alat belum pernah melapor versi (firmware lama), supaya
+            # tidak keliru ditampilkan sebagai "sudah terbaru".
+            "up_to_date": (versi == terbaru) if (versi and terbaru) else None,
+        })
+    return jsonify({
+        "latest":     terbaru or None,
+        "url":        os.environ.get("FIRMWARE_URL", "").strip() or None,
+        "configured": bool(terbaru and os.environ.get("FIRMWARE_URL", "").strip()),
+        "devices":    unit,
+    })
+
+
 @app.route("/api/admin/retention", methods=["GET"])
 def retention_status():
     """Kapan cleanup terakhir jalan — supaya tidak perlu menebak apakah retensi hidup."""

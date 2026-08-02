@@ -1907,7 +1907,60 @@ window.switchMlTab    = switchMlTab;
 async function loadAdminPage() {
   renderAdminRooms();
   renderVerifikatorList();
+  renderAdminFirmware();
   renderAdminAuditLog();
+}
+
+/**
+ * Daftar versi firmware tiap alat.
+ *
+ * Dengan pembaruan jarak jauh, alat memperbarui dirinya sendiri — tapi tidak
+ * selalu langsung: unit yang baterainya menipis atau sinyalnya lemah sengaja
+ * menunda. Halaman ini yang memberi tahu unit mana yang masih tertinggal,
+ * supaya tidak ada yang diam-diam berjalan dengan versi lama berbulan-bulan.
+ */
+async function renderAdminFirmware() {
+  const list = $('admin-fw-list');
+  const head = $('admin-fw-latest');
+  if (!list) return;
+
+  try {
+    const res = await authFetch(CONFIG.API_BASE_URL + '/api/admin/firmware');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+
+    if (!d.configured) {
+      if (head) head.textContent = 'Pembaruan jarak jauh belum diaktifkan';
+      list.innerHTML =
+        '<p style="font-size:12.5px;color:var(--muted);line-height:1.65;">' +
+          'Set <code>FIRMWARE_VERSION</code> dan <code>FIRMWARE_URL</code> di dashboard Render ' +
+          'untuk mengaktifkan pembaruan jarak jauh. Selama belum diset, alat tetap berjalan normal ' +
+          'dengan firmware yang terpasang.' +
+        '</p>';
+      return;
+    }
+
+    if (head) head.innerHTML = 'Versi terbaru: <strong>' + escHtml(d.latest) + '</strong>';
+
+    list.innerHTML = (d.devices || []).map(u => {
+      let warna, label;
+      if (u.up_to_date === true)       { warna = 'var(--emerald)'; label = 'terbaru'; }
+      else if (u.up_to_date === false) { warna = 'var(--amber)';   label = 'menunggu pembaruan'; }
+      else                             { warna = 'var(--muted-2)'; label = 'belum melapor'; }
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;
+                          padding:8px 12px;background:var(--bg-2);border-radius:8px;">
+          <span style="font-size:13px;font-weight:500;">${escHtml(u.room_name)}</span>
+          <span style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);">
+              ${escHtml(u.fw_version || '—')}</span>
+            <span style="font-size:11px;font-weight:600;color:${warna};">${label}</span>
+          </span>
+        </div>`;
+    }).join('');
+
+  } catch (e) {
+    list.innerHTML = '<p style="color:var(--crit);font-size:12.5px;">Gagal memuat versi firmware.</p>';
+  }
 }
 
 async function renderAdminRooms() {
